@@ -3,6 +3,8 @@ const movieGrid = document.querySelector(".movie-grid");
 const loadingState = document.querySelector(".state--loading");
 const errorState = document.querySelector(".state--error");
 const emptyState = document.querySelector(".state--empty");
+const errorTitle = errorState.querySelector("h2");
+const errorMessage = errorState.querySelector("p");
 const loadMoreButton = document.querySelector(".load-more");
 
 // Estado de la aplicación
@@ -127,8 +129,59 @@ function renderMovies(movies) {
 function setLoading(isLoading) {
   appState.isLoading = isLoading;
   loadingState.hidden = !isLoading;
-  movieGrid.hidden = isLoading;
-  loadMoreButton.hidden = isLoading;
+  const hasError = !errorState.hidden;
+  movieGrid.hidden = isLoading || hasError;
+  loadMoreButton.hidden = isLoading || hasError || appState.movies.length === 0;
+  loadMoreButton.disabled = isLoading;
 }
 
 // Inicialización
+function showError(title, message) {
+  errorTitle.textContent = title;
+  errorMessage.textContent = message;
+  errorState.hidden = false;
+  emptyState.hidden = true;
+  movieGrid.hidden = true;
+  loadMoreButton.hidden = true;
+}
+
+async function loadPopularMovies(append = false) {
+  if (appState.isLoading) {
+    return;
+  }
+
+  const page = append ? appState.page + 1 : 1;
+  loadingState.hidden = false;
+  errorState.hidden = true;
+  emptyState.hidden = true;
+  setLoading(true);
+
+  try {
+    const movies = await getPopularMovies(page);
+    appState.page = page;
+    appState.movies = append ? [...appState.movies, ...movies] : movies;
+    renderMovies(appState.movies);
+  } catch {
+    showError(
+      "No se pudieron cargar las películas",
+      "Ocurrió un error al conectar con TMDB. Intenta de nuevo en unos momentos."
+    );
+  } finally {
+    setLoading(false);
+  }
+}
+
+function initializeApp() {
+  if (typeof CONFIG === "undefined" || !CONFIG || CONFIG.API_KEY === "TU_API_KEY_AQUI") {
+    showError(
+      "Falta configurar la API de TMDB",
+      "Agrega tu clave en js/config.js y vuelve a cargar la página."
+    );
+    return;
+  }
+
+  loadPopularMovies();
+}
+
+loadMoreButton.addEventListener("click", () => loadPopularMovies(true));
+initializeApp();
