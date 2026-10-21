@@ -1,1 +1,173 @@
-/* Estilos de la aplicación de películas. */
+:root {
+  color-scheme: dark;
+  --color-bg: #111318;
+  --color-surface: #191c23;
+  --color-surface-raised: #20242d;
+  --color-border: #343a46;
+  --color-text: #f5f6f8;
+  --color-muted: #b8bfcc;
+  --color-accent: #ffb547;
+  --color-accent-strong: #ffc66e;
+  --color-danger: #ff8585;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.85rem;
+  --radius-lg: 1.25rem;
+  --shadow-card: 0 0.8rem 2rem rgb(0 0 0 / 22%);
+  --shadow-dialog: 0 1.5rem 5rem rgb(0 0 0 / 55%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+a {
+  color: var(--color-accent-strong);
+}
+
+.site-header {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.header-inner,
+.main-content,
+.site-footer {
+  width: min(100% - 2rem, 1200px);
+  margin-inline: auto;
+}
+
+.header-inner {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: fit-content;
+  color: var(--color-text);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2.25rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #211607;
+  font-size: 1.1rem;
+}
+
+.main-content {
+  flex: 1;
+  padding-block: var(--space-7);
+}
+
+.movie-section {
+  min-width: 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--color-accent-strong);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: clamp(1.65rem, 5vw, 2.25rem);
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.movie-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-5) var(--space-4);
+}
+
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-6);
+}
+
+.site-footer {
+  padding-block: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+.site-footer a {
+  margin-inline-start: var(--space-1);
+}
+
+@media (min-width: 700px) {
+  .header-inner {
+    grid-template-columns: auto minmax(260px, 1fr);
+    align-items: center;
+    column-gap: var(--space-6);
+  }
+
+  .filter-controls {
+    grid-column: 2;
+  }
+}
+
+@media (min-width: 1000px) {
+  .header-inner {
+    grid-template-columns: auto minmax(260px, 1fr) auto;
+  }
+
+  .filter-controls {
+    grid-column: auto;
+  }
+}
