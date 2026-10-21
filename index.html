@@ -64,8 +64,15 @@
 
         <div class="status-container" aria-live="polite" aria-atomic="true">
           <div class="state state--loading" hidden>
-            <span class="loading-skeleton" aria-hidden="true"></span>
             <p>Cargando películas...</p>
+            <div class="skeleton-grid" aria-hidden="true">
+              <span class="skeleton-card"></span>
+              <span class="skeleton-card"></span>
+              <span class="skeleton-card"></span>
+              <span class="skeleton-card"></span>
+              <span class="skeleton-card"></span>
+              <span class="skeleton-card"></span>
+            </div>
           </div>
           <div class="state state--error" role="alert" hidden>
             <span class="state-icon" aria-hidden="true">!</span>
