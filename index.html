@@ -3,14 +3,142 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aplicación de películas</title>
+    <meta name="theme-color" content="#111318">
+    <title>Butaca | Películas</title>
     <link rel="stylesheet" href="css/styles.css">
   </head>
   <body>
-    <header>
-      <h1>Películas</h1>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="#" aria-label="Butaca, inicio">
+          <span class="brand-mark" aria-hidden="true">B</span>
+          <span>Butaca</span>
+        </a>
+
+        <form class="search-form" role="search">
+          <label class="visually-hidden" for="movie-search">Buscar películas</label>
+          <input
+            id="movie-search"
+            name="q"
+            type="search"
+            placeholder="Buscar películas..."
+            autocomplete="off"
+          >
+          <button class="button button--primary" type="submit">Buscar</button>
+          <button class="button button--secondary" type="reset">Limpiar</button>
+        </form>
+
+        <div class="filter-controls">
+          <div class="control-group">
+            <label for="genre-filter">Género</label>
+            <select id="genre-filter" name="genre">
+              <option value="">Todos los géneros</option>
+              <option value="28">Acción</option>
+              <option value="35">Comedia</option>
+              <option value="18">Drama</option>
+              <option value="27">Terror</option>
+              <option value="878">Ciencia ficción</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="sort-order">Ordenar por</label>
+            <select id="sort-order" name="sort">
+              <option value="popular">Popularidad</option>
+              <option value="rating">Mejor calificadas</option>
+              <option value="recent">Más recientes</option>
+              <option value="title">Título (A-Z)</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </header>
-    <main></main>
+
+    <main class="main-content">
+      <section class="movie-section" aria-labelledby="section-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">DESCUBRE TU PRÓXIMA HISTORIA</p>
+            <h1 id="section-title">Películas populares</h1>
+          </div>
+        </div>
+
+        <div class="status-container" aria-live="polite" aria-atomic="true">
+          <div class="state state--loading" hidden>
+            <span class="loading-skeleton" aria-hidden="true"></span>
+            <p>Cargando películas...</p>
+          </div>
+          <div class="state state--error" role="alert" hidden>
+            <span class="state-icon" aria-hidden="true">!</span>
+            <h2>No se pudieron cargar las películas</h2>
+            <p>Intenta de nuevo en unos momentos.</p>
+          </div>
+          <div class="state state--empty" hidden>
+            <span class="state-icon" aria-hidden="true">⌕</span>
+            <h2>No encontramos películas</h2>
+            <p>Prueba con otra búsqueda o cambia los filtros.</p>
+          </div>
+        </div>
+
+        <div class="movie-grid" aria-label="Películas">
+          <!-- TEMPORAL: tarjetas de ejemplo para visualizar el diseño. -->
+          <article class="movie-card">
+            <div class="movie-poster poster--one" aria-hidden="true"><span>LA GRAN<br>AVENTURA</span></div>
+            <div class="movie-info">
+              <h2 class="movie-title">La gran aventura</h2>
+              <div class="movie-meta"><span>2024</span><span class="rating"><span aria-hidden="true">★</span> 8.4</span></div>
+            </div>
+          </article>
+          <article class="movie-card">
+            <div class="movie-poster poster--two" aria-hidden="true"><span>ÚLTIMA<br>LLAMADA</span></div>
+            <div class="movie-info">
+              <h2 class="movie-title">Última llamada</h2>
+              <div class="movie-meta"><span>2023</span><span class="rating"><span aria-hidden="true">★</span> 7.9</span></div>
+            </div>
+          </article>
+          <article class="movie-card">
+            <div class="movie-poster poster--three" aria-hidden="true"><span>OTRO<br>UNIVERSO</span></div>
+            <div class="movie-info">
+              <h2 class="movie-title">Otro universo</h2>
+              <div class="movie-meta"><span>2025</span><span class="rating"><span aria-hidden="true">★</span> 8.8</span></div>
+            </div>
+          </article>
+          <article class="movie-card">
+            <div class="movie-poster poster--four" aria-hidden="true"><span>TIERRA<br>DE NADIE</span></div>
+            <div class="movie-info">
+              <h2 class="movie-title">Tierra de nadie</h2>
+              <div class="movie-meta"><span>2022</span><span class="rating"><span aria-hidden="true">★</span> 7.5</span></div>
+            </div>
+          </article>
+          <article class="movie-card">
+            <div class="movie-poster poster--five" aria-hidden="true"><span>DESPUÉS<br>DEL SOL</span></div>
+            <div class="movie-info">
+              <h2 class="movie-title">Después del sol</h2>
+              <div class="movie-meta"><span>2024</span><span class="rating"><span aria-hidden="true">★</span> 8.1</span></div>
+            </div>
+          </article>
+          <article class="movie-card">
+            <div class="movie-poster poster--six" aria-hidden="true"><span>LA CASA<br>DEL LAGO</span></div>
+            <div class="movie-info">
+              <h2 class="movie-title">La casa del lago</h2>
+              <div class="movie-meta"><span>2021</span><span class="rating"><span aria-hidden="true">★</span> 7.7</span></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="load-more-wrap">
+          <button class="button button--secondary load-more" type="button">Cargar más</button>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="movie-dialog" aria-label="Detalle de película"></dialog>
+
+    <footer class="site-footer">
+      <p>
+        Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.
+        <a href="https://www.themoviedb.org/" rel="noopener noreferrer">Visita themoviedb.org</a>
+      </p>
+    </footer>
 
     <script src="js/config.js"></script>
     <script src="js/app.js"></script>
