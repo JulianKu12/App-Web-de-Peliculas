@@ -171,3 +171,187 @@ a {
     grid-column: auto;
   }
 }
+
+.movie-card {
+  min-width: 0;
+  border-radius: var(--radius-md);
+  outline: 0 solid transparent;
+  transition: transform 180ms ease, outline-color 180ms ease;
+}
+
+.movie-card:hover,
+.movie-card:focus-visible {
+  transform: translateY(-4px);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+
+.movie-poster {
+  display: grid;
+  overflow: hidden;
+  aspect-ratio: 2 / 3;
+  place-items: end start;
+  padding: var(--space-4);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  color: #fff;
+  isolation: isolate;
+  position: relative;
+}
+
+.movie-poster::before,
+.movie-poster::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.movie-poster::before {
+  background: linear-gradient(180deg, transparent 20%, rgb(0 0 0 / 78%) 100%);
+}
+
+.movie-poster::after {
+  inset: 12% 12% 28%;
+  border: 1px solid rgb(255 255 255 / 38%);
+  border-radius: 50% 50% 8% 8%;
+  opacity: 0.45;
+  transform: rotate(-12deg);
+}
+
+.movie-poster span {
+  font-size: clamp(1rem, 3vw, 1.35rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 0.98;
+  text-shadow: 0 2px 10px rgb(0 0 0 / 55%);
+}
+
+.poster--one {
+  background: radial-gradient(ellipse at 70% 28%, #f9b34b, transparent 32%), linear-gradient(145deg, #4d1645, #160f25 65%);
+}
+
+.poster--two {
+  background: radial-gradient(ellipse at 30% 24%, #d87554, transparent 28%), linear-gradient(145deg, #48242c, #111923 70%);
+}
+
+.poster--three {
+  background: radial-gradient(ellipse at 66% 34%, #83d5d0, transparent 30%), linear-gradient(145deg, #194b65, #11152d 68%);
+}
+
+.poster--four {
+  background: radial-gradient(ellipse at 50% 36%, #a6b67a, transparent 30%), linear-gradient(145deg, #394930, #17201b 68%);
+}
+
+.poster--five {
+  background: radial-gradient(ellipse at 50% 30%, #f2a96b, transparent 32%), linear-gradient(145deg, #8d3c31, #321b36 70%);
+}
+
+.poster--six {
+  background: radial-gradient(ellipse at 68% 25%, #9bc8dc, transparent 28%), linear-gradient(145deg, #275474, #19243d 70%);
+}
+
+.movie-info {
+  padding: var(--space-3) var(--space-1) 0;
+}
+
+.movie-title {
+  overflow: hidden;
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.movie-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.rating {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.rating span {
+  color: var(--color-accent);
+}
+
+.status-container:empty {
+  display: none;
+}
+
+.state[hidden] {
+  display: none;
+}
+
+.state {
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.state h2,
+.state p {
+  margin: 0;
+}
+
+.state p {
+  color: var(--color-muted);
+}
+
+.state--error {
+  border-color: rgb(255 133 133 / 55%);
+}
+
+.state--error .state-icon {
+  color: var(--color-danger);
+}
+
+.state-icon {
+  display: grid;
+  width: 2.5rem;
+  aspect-ratio: 1;
+  margin: 0 auto var(--space-3);
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+  color: var(--color-accent);
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.state h2 {
+  margin-bottom: var(--space-2);
+  font-size: 1.15rem;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.skeleton-card {
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-md);
+  background: linear-gradient(105deg, var(--color-surface-raised) 25%, #343a46 42%, var(--color-surface-raised) 60%);
+  background-size: 220% 100%;
+  animation: shimmer 1.5s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position-x: -220%;
+  }
+}
