@@ -10,6 +10,7 @@ const sectionTitle = document.querySelector("#section-title");
 const loadMoreButton = document.querySelector(".load-more");
 const movieDialog = document.querySelector(".movie-dialog");
 const dialogContent = movieDialog.querySelector(".dialog-content");
+const dialogCloseButton = movieDialog.querySelector(".dialog-close");
 const searchForm = document.querySelector(".search-form");
 const searchInput = document.querySelector("#movie-search");
 const genreFilter = document.querySelector("#genre-filter");
@@ -32,7 +33,9 @@ const appState = {
   requestController: null,
   searchDebounce: null,
   detailRequestController: null,
-  activeMovieId: null
+  activeMovieId: null,
+  detailOpener: null,
+  previousBodyOverflow: ""
 };
 
 // Capa de API
@@ -112,9 +115,17 @@ async function getMovieDetails(movieId, signal) {
 // Renderizado
 function createMovieCard(movie) {
   const title = movie.title || "Título no disponible";
+  const year = movie.release_date?.slice(0, 4) || "Año desconocido";
+  const ratingValue = Number(movie.vote_average) || 0;
   const card = document.createElement("article");
   card.className = "movie-card";
   card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute(
+    "aria-label",
+    `${title}, ${year}, calificación ${ratingValue.toFixed(1)} de 10. Abrir detalle.`
+  );
+  card.dataset.movieId = movie.id;
 
   const poster = document.createElement("div");
   poster.className = "movie-poster";
@@ -144,11 +155,10 @@ function createMovieCard(movie) {
   const meta = document.createElement("div");
   meta.className = "movie-meta";
 
-  const year = document.createElement("span");
-  year.textContent = movie.release_date?.slice(0, 4) || "Año desconocido";
+  const yearText = document.createElement("span");
+  yearText.textContent = year;
 
   const rating = document.createElement("span");
-  const ratingValue = Number(movie.vote_average) || 0;
   rating.className = `rating ${getRatingClass(ratingValue)}`;
 
   const star = document.createElement("span");
@@ -160,7 +170,7 @@ function createMovieCard(movie) {
   rating.setAttribute("aria-label", `Calificación: ${ratingValue.toFixed(1)} de 10`);
   rating.append(star, ratingText);
 
-  meta.append(year, rating);
+  meta.append(yearText, rating);
   info.append(heading, meta);
   card.append(poster, info);
 
@@ -197,8 +207,9 @@ function showMovieDetailLoading() {
   const loading = document.createElement("div");
   loading.className = "detail-loading";
   loading.setAttribute("role", "status");
-  loading.append(createTextElement("h2", "visually-hidden", "Cargando detalle de película"));
-  loading.firstChild.id = "dialog-title";
+  const title = createTextElement("h2", "visually-hidden", "Cargando detalle de película");
+  title.id = "dialog-title";
+  loading.append(title);
 
   const backdrop = document.createElement("div");
   backdrop.className = "detail-skeleton detail-skeleton--backdrop";
@@ -396,6 +407,45 @@ async function loadMovieDetail(movieId) {
       () => loadMovieDetail(movieId)
     );
   }
+}
+
+function openMovieDetail(movieId, opener) {
+  if (!movieId || movieDialog.open) {
+    return;
+  }
+
+  appState.detailOpener = opener;
+  appState.previousBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  movieDialog.showModal();
+  loadMovieDetail(movieId);
+}
+
+function closeMovieDetail() {
+  if (movieDialog.open) {
+    movieDialog.close();
+  }
+}
+
+function handleMovieGridClick(event) {
+  const card = event.target.closest(".movie-card");
+  if (card && movieGrid.contains(card)) {
+    openMovieDetail(card.dataset.movieId, card);
+  }
+}
+
+function handleMovieGridKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  const card = event.target.closest(".movie-card");
+  if (!card || !movieGrid.contains(card)) {
+    return;
+  }
+
+  event.preventDefault();
+  openMovieDetail(card.dataset.movieId, card);
 }
 
 function renderMovies(movies) {
@@ -611,5 +661,21 @@ genreFilter.addEventListener("change", handleFilterChange);
 sortFilter.addEventListener("change", handleFilterChange);
 loadMoreButton.addEventListener("click", () => {
   loadMovies({ reset: false });
+});
+movieGrid.addEventListener("click", handleMovieGridClick);
+movieGrid.addEventListener("keydown", handleMovieGridKeydown);
+dialogCloseButton.addEventListener("click", closeMovieDetail);
+movieDialog.addEventListener("click", event => {
+  if (event.target === movieDialog) {
+    closeMovieDetail();
+  }
+});
+movieDialog.addEventListener("close", () => {
+  appState.detailRequestController?.abort();
+  appState.detailRequestController = null;
+  appState.activeMovieId = null;
+  document.body.style.overflow = appState.previousBodyOverflow;
+  appState.detailOpener?.focus();
+  appState.detailOpener = null;
 });
 initializeApp();
