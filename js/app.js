@@ -560,7 +560,7 @@ function createMovieCard(movie) {
   card.setAttribute("aria-keyshortcuts", "Enter Space");
   card.setAttribute(
     "aria-label",
-    `${title}, ${year}, calificación ${ratingValue.toFixed(1)} de 10. Presiona Enter para ver el detalle.`
+    `${title}, ${year}, calificación ${ratingValue.toFixed(1)} de 10. Presiona Enter o Espacio para ver el detalle.`
   );
   card.dataset.movieId = movie.id;
 
