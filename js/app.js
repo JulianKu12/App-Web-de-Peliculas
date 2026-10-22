@@ -69,31 +69,52 @@ async function fetchTMDB(endpoint, params = {}, signal) {
     url.searchParams.set(key, value);
   });
 
-  const response = await fetch(url, { signal });
+  for (let attempt = 0; attempt <= 2; attempt += 1) {
+    const response = await fetchWithTimeout(url, signal);
 
-  if (!response.ok) {
-    throw createHttpError(response);
+    if (response.status === 429) {
+      const error = createHttpError(response);
+      if (attempt < 2) {
+        const retryDelay = error.retryAfter === null
+          ? 500 * (2 ** attempt)
+          : error.retryAfter * 1000;
+        await waitForRetry(retryDelay, signal);
+        continue;
+      }
+      error.retryAfter ??= 4;
+      throw error;
+    }
+
+    if (!response.ok) {
+      throw createHttpError(response);
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La respuesta JSON no es válida.", { cause: error });
+    }
+
+    if (!isValidTMDBResponse(endpoint, data)) {
+      throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La estructura de respuesta no es válida.");
+    }
+
+    return data;
   }
-
-  let data;
-  try {
-    data = await response.json();
-  } catch (error) {
-    throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La respuesta JSON no es válida.", { cause: error });
-  }
-
-  if (!isValidTMDBResponse(endpoint, data)) {
-    throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La estructura de respuesta no es válida.");
-  }
-
-  return data;
 }
 
 function createHttpError(response) {
   const retryAfterHeader = response.headers.get("Retry-After");
-  const retryAfter = retryAfterHeader && Number.isFinite(Number(retryAfterHeader))
-    ? Math.max(0, Number(retryAfterHeader))
-    : null;
+  let retryAfterSeconds = null;
+  if (retryAfterHeader) {
+    const numericDelay = Number(retryAfterHeader);
+    const dateDelay = (Date.parse(retryAfterHeader) - Date.now()) / 1000;
+    const parsedDelay = Number.isFinite(numericDelay) ? numericDelay : dateDelay;
+    if (Number.isFinite(parsedDelay)) {
+      retryAfterSeconds = Math.max(0, parsedDelay);
+    }
+  }
 
   if (response.status === 401) {
     return new AppError(ERROR_TYPES.CLAVE_INVALIDA, "TMDB rechazó las credenciales.");
@@ -102,13 +123,71 @@ function createHttpError(response) {
     return new AppError(ERROR_TYPES.NO_ENCONTRADO, "El recurso solicitado no existe.");
   }
   if (response.status === 429) {
-    return new AppError(ERROR_TYPES.LIMITE_PETICIONES, "Se alcanzó el límite de solicitudes.", { retryAfter });
+    return new AppError(ERROR_TYPES.LIMITE_PETICIONES, "Se alcanzó el límite de solicitudes.", {
+      retryAfter: retryAfterSeconds
+    });
   }
   if (response.status >= 500 && response.status <= 599) {
     return new AppError(ERROR_TYPES.ERROR_SERVIDOR, "TMDB no está disponible.");
   }
 
   return new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "TMDB rechazó la solicitud.");
+}
+
+async function fetchWithTimeout(url, signal) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new AppError(ERROR_TYPES.SIN_CONEXION, "El navegador no tiene conexión.");
+  }
+  if (signal?.aborted) {
+    throw new DOMException("La solicitud fue cancelada.", "AbortError");
+  }
+
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 10_000);
+
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (timedOut) {
+      throw new AppError(ERROR_TYPES.TIMEOUT, "La solicitud excedió el tiempo límite.", { cause: error });
+    }
+    if (signal?.aborted) {
+      throw error;
+    }
+    if (error instanceof TypeError) {
+      throw new AppError(ERROR_TYPES.SIN_CONEXION, "No fue posible conectar con TMDB.", { cause: error });
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+function waitForRetry(delay, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("La solicitud fue cancelada.", "AbortError"));
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, delay);
+    const abort = () => {
+      window.clearTimeout(timeoutId);
+      signal.removeEventListener("abort", abort);
+      reject(new DOMException("La solicitud fue cancelada.", "AbortError"));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+  });
 }
 
 function isValidTMDBResponse(endpoint, data) {
