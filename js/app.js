@@ -220,23 +220,25 @@ function startSearch(query) {
 
   if (normalizedQuery.length >= 2) {
     loadMovies("búsqueda", normalizedQuery);
-  } else if (appState.mode !== "popular") {
+  } else if (appState.mode !== "popular" || appState.movies.length === 0) {
     loadMovies("popular");
   }
 }
 
 function scheduleSearch() {
   window.clearTimeout(appState.searchDebounce);
-  cancelActiveRequest();
-
   const query = searchInput.value.trim();
   if (query.length < 2) {
     if (appState.mode !== "popular") {
+      cancelActiveRequest();
+      loadMovies("popular");
+    } else if (appState.movies.length === 0 && !appState.isLoading) {
       loadMovies("popular");
     }
     return;
   }
 
+  cancelActiveRequest();
   appState.searchDebounce = window.setTimeout(() => {
     startSearch(query);
   }, 500);
