@@ -3,8 +3,6 @@ const movieGrid = document.querySelector(".movie-grid");
 const loadingState = document.querySelector(".state--loading");
 const errorState = document.querySelector(".state--error");
 const emptyState = document.querySelector(".state--empty");
-const errorTitle = errorState.querySelector("h2");
-const errorMessage = errorState.querySelector("p");
 const emptyMessage = emptyState.querySelector("p");
 const sectionTitle = document.querySelector("#section-title");
 const loadMoreButton = document.querySelector(".load-more");
@@ -37,6 +35,63 @@ const ERROR_TYPES = {
   RESPUESTA_INVALIDA: "RESPUESTA_INVALIDA",
   SIN_RESULTADOS: "SIN_RESULTADOS"
 };
+
+function getErrorPresentation(error) {
+  const presentations = {
+    [ERROR_TYPES.SIN_CONEXION]: {
+      title: "Sin conexión",
+      description: "Revisa tu conexión a internet e inténtalo de nuevo.",
+      icon: "⌁",
+      allowsRetry: true
+    },
+    [ERROR_TYPES.TIMEOUT]: {
+      title: "La solicitud tardó demasiado",
+      description: "El servicio está tardando en responder. Puedes intentarlo otra vez.",
+      icon: "◷",
+      allowsRetry: true
+    },
+    [ERROR_TYPES.CLAVE_INVALIDA]: {
+      title: "No se pudo validar la clave de TMDB",
+      description: "Verifica la clave API en js/config.js y vuelve a intentarlo.",
+      icon: "!",
+      allowsRetry: false
+    },
+    [ERROR_TYPES.NO_ENCONTRADO]: {
+      title: "No encontramos ese contenido",
+      description: "Puede que la película ya no esté disponible.",
+      icon: "⌕",
+      allowsRetry: false
+    },
+    [ERROR_TYPES.LIMITE_PETICIONES]: {
+      title: "Hay muchas solicitudes en este momento",
+      description: "Espera un momento antes de volver a intentarlo.",
+      icon: "◷",
+      allowsRetry: true
+    },
+    [ERROR_TYPES.ERROR_SERVIDOR]: {
+      title: "TMDB no está disponible",
+      description: "El servicio tuvo un problema. Inténtalo de nuevo más tarde.",
+      icon: "!",
+      allowsRetry: true
+    },
+    [ERROR_TYPES.RESPUESTA_INVALIDA]: {
+      title: "No pudimos procesar la respuesta",
+      description: "Revisa la configuración e inténtalo de nuevo.",
+      icon: "!",
+      allowsRetry: false
+    },
+    [ERROR_TYPES.SIN_RESULTADOS]: {
+      title: "No encontramos películas",
+      description: "Prueba con otro título o cambia los filtros.",
+      icon: "⌕",
+      allowsRetry: false
+    }
+  };
+
+  return presentations[error.type] || presentations[ERROR_TYPES.RESPUESTA_INVALIDA];
+}
+
+const errorCountdowns = new WeakMap();
 
 // Estado de la aplicación
 const appState = {
@@ -362,6 +417,80 @@ function createTextElement(tagName, className, text) {
   return element;
 }
 
+function clearErrorCountdown(container) {
+  const timerId = errorCountdowns.get(container);
+  if (timerId) {
+    window.clearInterval(timerId);
+    errorCountdowns.delete(container);
+  }
+}
+
+function renderErrorState(container, error, onRetry, isDialog = false) {
+  clearErrorCountdown(container);
+  const presentation = getErrorPresentation(error);
+  container.replaceChildren();
+  if (isDialog) {
+    container.className = "detail-error";
+  }
+
+  const icon = createTextElement("span", "state-icon", presentation.icon);
+  icon.setAttribute("aria-hidden", "true");
+  const title = createTextElement(
+    "h2",
+    isDialog ? "detail-error-title" : "",
+    presentation.title
+  );
+  if (isDialog) {
+    title.id = "dialog-title";
+  }
+  const description = createTextElement(
+    "p",
+    isDialog ? "detail-error-message" : "",
+    presentation.description
+  );
+  container.append(icon, title, description);
+
+  if (!presentation.allowsRetry || typeof onRetry !== "function") {
+    return;
+  }
+
+  const retryButton = document.createElement("button");
+  retryButton.className = "button button--primary";
+  retryButton.type = "button";
+  retryButton.textContent = "Reintentar";
+  retryButton.addEventListener("click", onRetry);
+  container.append(retryButton);
+
+  if (error.type !== ERROR_TYPES.LIMITE_PETICIONES) {
+    return;
+  }
+
+  let remainingSeconds = Math.ceil(error.retryAfter ?? 0);
+  if (remainingSeconds <= 0) {
+    return;
+  }
+
+  retryButton.disabled = true;
+  const countdown = createTextElement(
+    "p",
+    "error-countdown",
+    `Podrás reintentar en ${remainingSeconds} s.`
+  );
+  container.append(countdown);
+
+  const timerId = window.setInterval(() => {
+    remainingSeconds -= 1;
+    if (remainingSeconds <= 0) {
+      clearErrorCountdown(container);
+      retryButton.disabled = false;
+      countdown.textContent = "Ya puedes intentarlo de nuevo.";
+      return;
+    }
+    countdown.textContent = `Podrás reintentar en ${remainingSeconds} s.`;
+  }, 1000);
+  errorCountdowns.set(container, timerId);
+}
+
 function showMovieDetailLoading() {
   const loading = document.createElement("div");
   loading.className = "detail-loading";
@@ -528,22 +657,6 @@ function renderMovieDetails(detail) {
   dialogContent.replaceChildren(createMovieDetailContent(detail));
 }
 
-function showMovieDetailError(message, onRetry) {
-  const error = document.createElement("div");
-  error.className = "detail-error";
-  error.setAttribute("role", "alert");
-  const title = createTextElement("h2", "detail-error-title", "No se pudo cargar el detalle");
-  title.id = "dialog-title";
-  error.append(title, createTextElement("p", "detail-error-message", message));
-  const retry = document.createElement("button");
-  retry.className = "button button--primary";
-  retry.type = "button";
-  retry.textContent = "Reintentar";
-  retry.addEventListener("click", onRetry);
-  error.append(retry);
-  dialogContent.replaceChildren(error);
-}
-
 async function loadMovieDetail(movieId) {
   appState.detailRequestController?.abort();
   const controller = new AbortController();
@@ -561,10 +674,8 @@ async function loadMovieDetail(movieId) {
     if (controller.signal.aborted || error.name === "AbortError") {
       return;
     }
-    showMovieDetailError(
-      "Ocurrió un error al consultar TMDB. Intenta nuevamente.",
-      () => loadMovieDetail(movieId)
-    );
+    console.error("Error al cargar el detalle de la película.", error);
+    renderErrorState(dialogContent, error, () => loadMovieDetail(movieId), true);
   }
 }
 
@@ -650,13 +761,12 @@ function updateSectionTitle() {
 }
 
 // Inicialización
-function showError(title, message) {
-  errorTitle.textContent = title;
-  errorMessage.textContent = message;
+function showError(error, onRetry) {
   errorState.hidden = false;
   emptyState.hidden = true;
   movieGrid.hidden = true;
   loadMoreButton.hidden = true;
+  renderErrorState(errorState, error, onRetry);
 }
 
 async function loadMovies({ reset = true } = {}) {
@@ -691,6 +801,13 @@ async function loadMovies({ reset = true } = {}) {
       return;
     }
 
+    if (reset && data.results.length === 0) {
+      appState.page = page;
+      appState.totalPages = Number(data.total_pages) || 1;
+      appState.movies = [];
+      throw new AppError(ERROR_TYPES.SIN_RESULTADOS, "La consulta no devolvió películas.");
+    }
+
     appState.page = page;
     appState.totalPages = Number(data.total_pages) || 1;
     appState.movies = reset ? data.results : [...appState.movies, ...data.results];
@@ -700,12 +817,8 @@ async function loadMovies({ reset = true } = {}) {
       return;
     }
 
-    showError(
-      "No se pudieron cargar las películas",
-      `Ocurrió un error al conectar con TMDB: ${
-        error instanceof Error ? error.message : "error desconocido"
-      }`
-    );
+    console.error("Error al cargar películas.", error);
+    showError(error, () => loadMovies());
   } finally {
     if (requestId === appState.requestId) {
       appState.requestController = null;
@@ -745,10 +858,7 @@ function scheduleSearch() {
 
 function initializeApp() {
   if (typeof CONFIG === "undefined" || !CONFIG || CONFIG.API_KEY === "TU_API_KEY_AQUI") {
-    showError(
-      "Falta configurar la API de TMDB",
-      "Agrega tu clave en js/config.js y vuelve a cargar la página."
-    );
+    showError(new AppError(ERROR_TYPES.CLAVE_INVALIDA, "La clave API no está configurada."));
     return;
   }
 
@@ -770,10 +880,8 @@ async function loadGenres() {
     });
   } catch (error) {
     console.error("No se pudieron cargar los géneros de TMDB.", error);
-    const errorOption = document.createElement("option");
-    errorOption.disabled = true;
-    errorOption.textContent = "No se pudieron cargar los géneros";
-    genreFilter.append(errorOption);
+    renderErrorState(errorState, error, () => loadGenres());
+    errorState.hidden = false;
   }
 }
 
