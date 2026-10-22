@@ -150,6 +150,20 @@ a {
   margin-inline-start: var(--space-1);
 }
 
+.connection-notice {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid #775e2e;
+  border-radius: var(--radius-sm);
+  background: #2d2619;
+  color: #ffe0a3;
+  font-size: 0.875rem;
+}
+
+.connection-notice[hidden] {
+  display: none;
+}
+
 @media (min-width: 700px) {
   .header-inner {
     grid-template-columns: auto minmax(260px, 1fr);

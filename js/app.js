@@ -9,6 +9,7 @@ const loadMoreButton = document.querySelector(".load-more");
 const movieDialog = document.querySelector(".movie-dialog");
 const dialogContent = movieDialog.querySelector(".dialog-content");
 const dialogCloseButton = movieDialog.querySelector(".dialog-close");
+const connectionNotice = document.querySelector(".connection-notice");
 const searchForm = document.querySelector(".search-form");
 const searchInput = document.querySelector("#movie-search");
 const genreFilter = document.querySelector("#genre-filter");
@@ -111,7 +112,9 @@ const appState = {
   detailRequestController: null,
   activeMovieId: null,
   detailOpener: null,
-  previousBodyOverflow: ""
+  previousBodyOverflow: "",
+  hadConnectionError: false,
+  connectionRetryAction: null
 };
 
 // Capa de API
@@ -669,12 +672,18 @@ async function loadMovieDetail(movieId) {
     if (appState.detailRequestController !== controller) {
       return;
     }
+    appState.hadConnectionError = false;
+    appState.connectionRetryAction = null;
     renderMovieDetails(detail);
   } catch (error) {
     if (controller.signal.aborted || error.name === "AbortError") {
       return;
     }
     console.error("Error al cargar el detalle de la película.", error);
+    if (error.type === ERROR_TYPES.SIN_CONEXION) {
+      appState.hadConnectionError = true;
+      appState.connectionRetryAction = () => loadMovieDetail(movieId);
+    }
     renderErrorState(dialogContent, error, () => loadMovieDetail(movieId), true);
   }
 }
@@ -801,6 +810,8 @@ async function loadMovies({ reset = true } = {}) {
       return;
     }
 
+    appState.hadConnectionError = false;
+    appState.connectionRetryAction = null;
     if (reset && data.results.length === 0) {
       appState.page = page;
       appState.totalPages = Number(data.total_pages) || 1;
@@ -818,7 +829,11 @@ async function loadMovies({ reset = true } = {}) {
     }
 
     console.error("Error al cargar películas.", error);
-    showError(error, () => loadMovies());
+    if (error.type === ERROR_TYPES.SIN_CONEXION) {
+      appState.hadConnectionError = true;
+      appState.connectionRetryAction = () => loadMovies({ reset });
+    }
+    showError(error, () => loadMovies({ reset }));
   } finally {
     if (requestId === appState.requestId) {
       appState.requestController = null;
@@ -869,6 +884,8 @@ function initializeApp() {
 async function loadGenres() {
   try {
     const genres = await getMovieGenres();
+    appState.hadConnectionError = false;
+    appState.connectionRetryAction = null;
     const defaultOption = genreFilter.options[0];
     genreFilter.replaceChildren(defaultOption);
 
@@ -880,8 +897,11 @@ async function loadGenres() {
     });
   } catch (error) {
     console.error("No se pudieron cargar los géneros de TMDB.", error);
-    renderErrorState(errorState, error, () => loadGenres());
-    errorState.hidden = false;
+    if (error.type === ERROR_TYPES.SIN_CONEXION) {
+      appState.hadConnectionError = true;
+      appState.connectionRetryAction = () => loadGenres();
+    }
+    showError(error, () => loadGenres());
   }
 }
 
@@ -945,4 +965,17 @@ movieDialog.addEventListener("close", () => {
   appState.detailOpener?.focus();
   appState.detailOpener = null;
 });
+window.addEventListener("offline", () => {
+  connectionNotice.hidden = false;
+});
+window.addEventListener("online", () => {
+  connectionNotice.hidden = true;
+  if (appState.hadConnectionError && appState.connectionRetryAction) {
+    const retryAction = appState.connectionRetryAction;
+    appState.hadConnectionError = false;
+    appState.connectionRetryAction = null;
+    retryAction();
+  }
+});
+connectionNotice.hidden = typeof navigator === "undefined" || navigator.onLine !== false;
 initializeApp();
