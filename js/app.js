@@ -21,7 +21,7 @@ const appState = {
 };
 
 // Capa de API
-async function fetchTMDB(endpoint, params = {}) {
+async function fetchTMDB(endpoint, params = {}, signal) {
   const url = new URL(`${CONFIG.BASE_URL}${endpoint}`);
   url.searchParams.set("api_key", CONFIG.API_KEY);
   url.searchParams.set("language", CONFIG.LANGUAGE);
@@ -30,7 +30,7 @@ async function fetchTMDB(endpoint, params = {}) {
     url.searchParams.set(key, value);
   });
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
 
   if (!response.ok) {
     throw new Error(`La API de TMDB respondió con el estado ${response.status}.`);
@@ -41,6 +41,11 @@ async function fetchTMDB(endpoint, params = {}) {
 
 async function getPopularMovies(page) {
   const data = await fetchTMDB("/movie/popular", { page });
+  return data.results;
+}
+
+async function searchMovies(query, page, signal) {
+  const data = await fetchTMDB("/search/movie", { query, page }, signal);
   return data.results;
 }
 
