@@ -11,6 +11,8 @@ const loadMoreButton = document.querySelector(".load-more");
 const searchForm = document.querySelector(".search-form");
 const searchInput = document.querySelector("#movie-search");
 const genreFilter = document.querySelector("#genre-filter");
+const sortFilter = document.querySelector("#sort-order");
+const filterControls = document.querySelector(".filter-controls");
 
 // Estado de la aplicación
 const appState = {
@@ -275,6 +277,7 @@ function scheduleSearch() {
   window.clearTimeout(appState.searchDebounce);
   const query = searchInput.value.trim();
   appState.filters.query = query;
+  updateFilterAvailability();
 
   if (query.length < 2) {
     if (appState.mode !== "popular") {
@@ -326,12 +329,36 @@ async function loadGenres() {
   }
 }
 
+function updateFilterAvailability() {
+  const hasSearchText = appState.filters.query.length > 0;
+  genreFilter.disabled = hasSearchText;
+  sortFilter.disabled = hasSearchText;
+  filterControls.classList.toggle("is-disabled", hasSearchText);
+}
+
+function handleFilterChange() {
+  if (appState.filters.query.length > 0) {
+    return;
+  }
+
+  appState.filters.genre = genreFilter.value;
+  appState.filters.sort = sortFilter.value;
+  loadMovies();
+
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  movieGrid.scrollIntoView({
+    behavior: prefersReducedMotion ? "auto" : "smooth",
+    block: "start"
+  });
+}
+
 searchInput.addEventListener("input", scheduleSearch);
 searchForm.addEventListener("submit", event => {
   event.preventDefault();
   window.clearTimeout(appState.searchDebounce);
   cancelActiveRequest();
   appState.filters.query = searchInput.value.trim();
+  updateFilterAvailability();
   loadMovies();
 });
 searchForm.addEventListener("reset", event => {
@@ -339,9 +366,12 @@ searchForm.addEventListener("reset", event => {
   window.clearTimeout(appState.searchDebounce);
   searchInput.value = "";
   appState.filters.query = "";
+  updateFilterAvailability();
   cancelActiveRequest();
   loadMovies();
 });
+genreFilter.addEventListener("change", handleFilterChange);
+sortFilter.addEventListener("change", handleFilterChange);
 loadMoreButton.addEventListener("click", () => {
   loadMovies({ reset: false });
 });
