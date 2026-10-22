@@ -48,13 +48,30 @@ async function fetchTMDB(endpoint, params = {}, signal) {
 }
 
 async function getPopularMovies(page, signal) {
-  const data = await fetchTMDB("/movie/popular", { page }, signal);
-  return data.results;
+  return fetchTMDB("/movie/popular", { page }, signal);
 }
 
 async function searchMovies(query, page, signal) {
-  const data = await fetchTMDB("/search/movie", { query, page }, signal);
-  return data.results;
+  return fetchTMDB("/search/movie", { query, page }, signal);
+}
+
+async function discoverMovies(filters, page, signal) {
+  const sortBy = {
+    popular: "popularity.desc",
+    rating: "vote_average.desc",
+    recent: "primary_release_date.desc"
+  }[filters.sort];
+  const params = { page, sort_by: sortBy };
+
+  if (filters.genre) {
+    params.with_genres = filters.genre;
+  }
+
+  if (filters.sort === "rating") {
+    params["vote_count.gte"] = 200;
+  }
+
+  return fetchTMDB("/discover/movie", params, signal);
 }
 
 async function getMovieGenres() {
@@ -153,6 +170,32 @@ function setLoading(isLoading) {
   loadMoreButton.disabled = isLoading;
 }
 
+function getCurrentMode() {
+  if (appState.filters.query.trim().length >= 2) {
+    return "búsqueda";
+  }
+
+  if (appState.filters.genre || appState.filters.sort !== "popular") {
+    return "discover";
+  }
+
+  return "popular";
+}
+
+function updateSectionTitle() {
+  if (appState.mode === "búsqueda") {
+    sectionTitle.textContent = `Resultados para «${appState.filters.query}»`;
+  } else if (appState.mode === "discover" && appState.filters.genre) {
+    sectionTitle.textContent = `Películas de ${genreFilter.selectedOptions[0].textContent}`;
+  } else if (appState.mode === "discover" && appState.filters.sort === "rating") {
+    sectionTitle.textContent = "Películas mejor calificadas";
+  } else if (appState.mode === "discover" && appState.filters.sort === "recent") {
+    sectionTitle.textContent = "Películas más recientes";
+  } else {
+    sectionTitle.textContent = "Películas populares";
+  }
+}
+
 // Inicialización
 function showError(title, message) {
   errorTitle.textContent = title;
@@ -163,37 +206,36 @@ function showError(title, message) {
   loadMoreButton.hidden = true;
 }
 
-async function loadMovies(mode, query = "", append = false) {
+async function loadMovies({ reset = true } = {}) {
   appState.requestController?.abort();
   const requestController = new AbortController();
   const requestId = ++appState.requestId;
   appState.requestController = requestController;
-  appState.mode = mode;
-  appState.filters.query = query;
-  sectionTitle.textContent = mode === "búsqueda"
-    ? `Resultados para «${query}»`
-    : "Películas populares";
-  emptyMessage.textContent = mode === "búsqueda"
+  appState.mode = getCurrentMode();
+  updateSectionTitle();
+  emptyMessage.textContent = appState.mode === "búsqueda"
     ? "Prueba con otro título."
     : "Prueba con otra búsqueda o cambia los filtros.";
 
-  const page = append ? appState.page + 1 : 1;
+  const page = reset ? 1 : appState.page + 1;
   loadingState.hidden = false;
   errorState.hidden = true;
   emptyState.hidden = true;
   setLoading(true);
 
   try {
-    const movies = mode === "búsqueda"
-      ? await searchMovies(query, page, requestController.signal)
-      : await getPopularMovies(page, requestController.signal);
+    const data = appState.mode === "búsqueda"
+      ? await searchMovies(appState.filters.query.trim(), page, requestController.signal)
+      : appState.mode === "discover"
+        ? await discoverMovies(appState.filters, page, requestController.signal)
+        : await getPopularMovies(page, requestController.signal);
 
     if (requestId !== appState.requestId) {
       return;
     }
 
     appState.page = page;
-    appState.movies = append ? [...appState.movies, ...movies] : movies;
+    appState.movies = reset ? data.results : [...appState.movies, ...data.results];
     renderMovies(appState.movies);
   } catch (error) {
     if (requestId !== appState.requestId || error.name === "AbortError") {
@@ -221,32 +263,24 @@ function cancelActiveRequest() {
   setLoading(false);
 }
 
-function startSearch(query) {
-  const normalizedQuery = query.trim();
-
-  if (normalizedQuery.length >= 2) {
-    loadMovies("búsqueda", normalizedQuery);
-  } else if (appState.mode !== "popular" || appState.movies.length === 0) {
-    loadMovies("popular");
-  }
-}
-
 function scheduleSearch() {
   window.clearTimeout(appState.searchDebounce);
   const query = searchInput.value.trim();
+  appState.filters.query = query;
+
   if (query.length < 2) {
     if (appState.mode !== "popular") {
       cancelActiveRequest();
-      loadMovies("popular");
+      loadMovies();
     } else if (appState.movies.length === 0 && !appState.isLoading) {
-      loadMovies("popular");
+      loadMovies();
     }
     return;
   }
 
   cancelActiveRequest();
   appState.searchDebounce = window.setTimeout(() => {
-    startSearch(query);
+    loadMovies();
   }, 500);
 }
 
@@ -260,7 +294,7 @@ function initializeApp() {
   }
 
   loadGenres();
-  loadMovies("popular");
+  loadMovies();
 }
 
 async function loadGenres() {
@@ -289,16 +323,18 @@ searchForm.addEventListener("submit", event => {
   event.preventDefault();
   window.clearTimeout(appState.searchDebounce);
   cancelActiveRequest();
-  startSearch(searchInput.value);
+  appState.filters.query = searchInput.value.trim();
+  loadMovies();
 });
 searchForm.addEventListener("reset", event => {
   event.preventDefault();
   window.clearTimeout(appState.searchDebounce);
   searchInput.value = "";
+  appState.filters.query = "";
   cancelActiveRequest();
-  loadMovies("popular");
+  loadMovies();
 });
 loadMoreButton.addEventListener("click", () => {
-  loadMovies(appState.mode, appState.filters.query, true);
+  loadMovies({ reset: false });
 });
 initializeApp();
