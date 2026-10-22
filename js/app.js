@@ -10,6 +10,7 @@ const sectionTitle = document.querySelector("#section-title");
 const loadMoreButton = document.querySelector(".load-more");
 const searchForm = document.querySelector(".search-form");
 const searchInput = document.querySelector("#movie-search");
+const genreFilter = document.querySelector("#genre-filter");
 
 // Estado de la aplicación
 const appState = {
@@ -54,6 +55,11 @@ async function getPopularMovies(page, signal) {
 async function searchMovies(query, page, signal) {
   const data = await fetchTMDB("/search/movie", { query, page }, signal);
   return data.results;
+}
+
+async function getMovieGenres() {
+  const data = await fetchTMDB("/genre/movie/list");
+  return data.genres;
 }
 
 // Renderizado
@@ -253,7 +259,29 @@ function initializeApp() {
     return;
   }
 
+  loadGenres();
   loadMovies("popular");
+}
+
+async function loadGenres() {
+  try {
+    const genres = await getMovieGenres();
+    const defaultOption = genreFilter.options[0];
+    genreFilter.replaceChildren(defaultOption);
+
+    genres.forEach(genre => {
+      const option = document.createElement("option");
+      option.value = genre.id;
+      option.textContent = genre.name;
+      genreFilter.append(option);
+    });
+  } catch (error) {
+    console.error("No se pudieron cargar los géneros de TMDB.", error);
+    const errorOption = document.createElement("option");
+    errorOption.disabled = true;
+    errorOption.textContent = "No se pudieron cargar los géneros";
+    genreFilter.append(errorOption);
+  }
 }
 
 searchInput.addEventListener("input", scheduleSearch);
