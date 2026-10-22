@@ -8,6 +8,8 @@ const errorMessage = errorState.querySelector("p");
 const emptyMessage = emptyState.querySelector("p");
 const sectionTitle = document.querySelector("#section-title");
 const loadMoreButton = document.querySelector(".load-more");
+const movieDialog = document.querySelector(".movie-dialog");
+const dialogContent = movieDialog.querySelector(".dialog-content");
 const searchForm = document.querySelector(".search-form");
 const searchInput = document.querySelector("#movie-search");
 const genreFilter = document.querySelector("#genre-filter");
@@ -28,7 +30,9 @@ const appState = {
   isLoading: false,
   requestId: 0,
   requestController: null,
-  searchDebounce: null
+  searchDebounce: null,
+  detailRequestController: null,
+  activeMovieId: null
 };
 
 // Capa de API
@@ -180,6 +184,218 @@ function getRatingClass(rating) {
   }
 
   return "rating--low";
+}
+
+function createTextElement(tagName, className, text) {
+  const element = document.createElement(tagName);
+  element.className = className;
+  element.textContent = text;
+  return element;
+}
+
+function showMovieDetailLoading() {
+  const loading = document.createElement("div");
+  loading.className = "detail-loading";
+  loading.setAttribute("role", "status");
+  loading.append(createTextElement("h2", "visually-hidden", "Cargando detalle de película"));
+  loading.firstChild.id = "dialog-title";
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "detail-skeleton detail-skeleton--backdrop";
+  const heading = document.createElement("div");
+  heading.className = "detail-skeleton detail-skeleton--heading";
+  const line = document.createElement("div");
+  line.className = "detail-skeleton detail-skeleton--line";
+  const cast = document.createElement("div");
+  cast.className = "detail-skeleton detail-skeleton--cast";
+  loading.append(backdrop, heading, line, cast);
+  dialogContent.replaceChildren(loading);
+}
+
+function createCastMember(actor) {
+  const member = document.createElement("li");
+  member.className = "cast-member";
+
+  if (actor.profile_path) {
+    const image = document.createElement("img");
+    image.className = "cast-photo";
+    image.src = `${CONFIG.IMG_URL}w185${actor.profile_path}`;
+    image.alt = "";
+    image.loading = "lazy";
+    image.addEventListener("error", () => {
+      image.replaceWith(createCastInitial(actor.name));
+    }, { once: true });
+    member.append(image);
+  } else {
+    member.append(createCastInitial(actor.name));
+  }
+
+  const name = createTextElement("span", "cast-name", actor.name || "Nombre no disponible");
+  const character = createTextElement(
+    "span",
+    "cast-character",
+    actor.character || "Personaje no disponible"
+  );
+  member.append(name, character);
+
+  return member;
+}
+
+function createCastInitial(name = "") {
+  return createTextElement("span", "cast-initial", name.trim().charAt(0).toUpperCase() || "?");
+}
+
+function createGenreChips(genres = []) {
+  const list = document.createElement("ul");
+  list.className = "detail-genres";
+  list.setAttribute("aria-label", "Géneros");
+
+  genres.forEach(genre => {
+    list.append(createTextElement("li", "genre-chip", genre.name));
+  });
+
+  return list;
+}
+
+function createMovieDetailContent({ movie, overviewIsEnglish }) {
+  const content = document.createElement("div");
+  content.className = "movie-detail";
+
+  if (movie.backdrop_path) {
+    const backdrop = document.createElement("img");
+    backdrop.className = "detail-backdrop";
+    backdrop.src = `${CONFIG.IMG_URL}original${movie.backdrop_path}`;
+    backdrop.alt = "";
+    backdrop.addEventListener("error", () => backdrop.remove(), { once: true });
+    content.append(backdrop);
+  }
+
+  const body = document.createElement("div");
+  body.className = "detail-body";
+
+  const poster = document.createElement("div");
+  poster.className = "detail-poster";
+  if (movie.poster_path) {
+    const posterImage = document.createElement("img");
+    posterImage.src = `${CONFIG.IMG_URL}w342${movie.poster_path}`;
+    posterImage.alt = `Póster de ${movie.title}`;
+    posterImage.addEventListener("error", () => {
+      posterImage.replaceWith(createPosterPlaceholder());
+    }, { once: true });
+    poster.append(posterImage);
+  } else {
+    poster.append(createPosterPlaceholder());
+  }
+
+  const information = document.createElement("div");
+  information.className = "detail-information";
+  const title = createTextElement("h2", "detail-title", movie.title);
+  title.id = "dialog-title";
+  information.append(title);
+
+  if (movie.tagline) {
+    information.append(createTextElement("p", "detail-tagline", `“${movie.tagline}”`));
+  }
+
+  const metadata = document.createElement("div");
+  metadata.className = "detail-metadata";
+  const year = movie.release_date?.slice(0, 4) || "Año no disponible";
+  const runtime = movie.runtime
+    ? `${Math.floor(movie.runtime / 60)} h ${movie.runtime % 60} min`
+    : "Duración no disponible";
+  const rating = Number(movie.vote_average) || 0;
+  metadata.append(
+    createTextElement("span", "detail-year", year),
+    createTextElement("span", "detail-runtime", runtime),
+    createTextElement("span", `detail-rating ${getRatingClass(rating)}`, `★ ${rating.toFixed(1)}`)
+  );
+  information.append(metadata, createGenreChips(movie.genres));
+
+  const overviewSection = document.createElement("section");
+  overviewSection.className = "detail-overview";
+  overviewSection.append(createTextElement("h3", "detail-section-title", "Sinopsis"));
+  if (overviewIsEnglish) {
+    overviewSection.append(
+      createTextElement("p", "detail-language-note", "Sinopsis disponible en inglés.")
+    );
+  }
+  overviewSection.append(
+    createTextElement("p", "detail-overview-text", movie.overview || "Sinopsis no disponible.")
+  );
+  information.append(overviewSection);
+
+  const cast = movie.credits?.cast?.slice(0, 8) || [];
+  if (cast.length > 0) {
+    const castSection = document.createElement("section");
+    castSection.className = "detail-cast";
+    castSection.append(createTextElement("h3", "detail-section-title", "Reparto principal"));
+    const castList = document.createElement("ul");
+    castList.className = "cast-list";
+    cast.forEach(actor => castList.append(createCastMember(actor)));
+    castSection.append(castList);
+    information.append(castSection);
+  }
+
+  const trailer = movie.videos?.results?.find(video =>
+    video.site === "YouTube" && video.type === "Trailer" && video.key
+  );
+  if (trailer) {
+    const trailerLink = document.createElement("a");
+    trailerLink.className = "button button--primary detail-trailer";
+    trailerLink.href = `https://www.youtube.com/watch?v=${encodeURIComponent(trailer.key)}`;
+    trailerLink.target = "_blank";
+    trailerLink.rel = "noopener noreferrer";
+    trailerLink.textContent = "Ver tráiler";
+    information.append(trailerLink);
+  }
+
+  body.append(poster, information);
+  content.append(body);
+  return content;
+}
+
+function renderMovieDetails(detail) {
+  dialogContent.replaceChildren(createMovieDetailContent(detail));
+}
+
+function showMovieDetailError(message, onRetry) {
+  const error = document.createElement("div");
+  error.className = "detail-error";
+  error.setAttribute("role", "alert");
+  const title = createTextElement("h2", "detail-error-title", "No se pudo cargar el detalle");
+  title.id = "dialog-title";
+  error.append(title, createTextElement("p", "detail-error-message", message));
+  const retry = document.createElement("button");
+  retry.className = "button button--primary";
+  retry.type = "button";
+  retry.textContent = "Reintentar";
+  retry.addEventListener("click", onRetry);
+  error.append(retry);
+  dialogContent.replaceChildren(error);
+}
+
+async function loadMovieDetail(movieId) {
+  appState.detailRequestController?.abort();
+  const controller = new AbortController();
+  appState.detailRequestController = controller;
+  appState.activeMovieId = movieId;
+  showMovieDetailLoading();
+
+  try {
+    const detail = await getMovieDetails(movieId, controller.signal);
+    if (appState.detailRequestController !== controller) {
+      return;
+    }
+    renderMovieDetails(detail);
+  } catch (error) {
+    if (controller.signal.aborted || error.name === "AbortError") {
+      return;
+    }
+    showMovieDetailError(
+      "Ocurrió un error al consultar TMDB. Intenta nuevamente.",
+      () => loadMovieDetail(movieId)
+    );
+  }
 }
 
 function renderMovies(movies) {
