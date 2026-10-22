@@ -215,7 +215,20 @@ a {
   min-width: 0;
   border-radius: var(--radius-md);
   outline: 0 solid transparent;
+  animation: movie-enter 220ms ease both;
   transition: transform 180ms ease, outline-color 180ms ease;
+}
+
+@keyframes movie-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .movie-card:hover,
@@ -443,6 +456,11 @@ a {
   border-radius: var(--radius-sm);
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+.search-form input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .search-form input {
@@ -834,7 +852,45 @@ a {
   opacity: 0.6;
 }
 
+.favorite-button:focus-visible,
+.back-to-top:focus-visible {
+  outline-offset: 4px;
+}
+
+.back-to-top {
+  position: fixed;
+  right: max(1rem, calc((100vw - 1200px) / 2));
+  bottom: 1rem;
+  z-index: 3;
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #211607;
+  cursor: pointer;
+  font-size: 1.5rem;
+  font-weight: 800;
+  box-shadow: var(--shadow-card);
+}
+
+.back-to-top[hidden] {
+  display: none;
+}
+
 @media (max-width: 640px) {
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .favorites-toggle {
+    min-height: 2.5rem;
+    padding-inline: var(--space-2);
+    font-size: 0.875rem;
+  }
+
   .movie-dialog {
     width: 98vw;
     height: 96vh;
@@ -852,6 +908,10 @@ a {
     grid-template-columns: 105px minmax(0, 1fr);
     gap: var(--space-4);
     padding: 165px var(--space-4) var(--space-5);
+  }
+
+  .movie-detail--no-backdrop .detail-body {
+    padding-top: var(--space-5);
   }
 
   .detail-information {
@@ -913,6 +973,28 @@ a {
 }
 
 @media (max-width: 380px) {
+  .header-inner,
+  .main-content,
+  .site-footer {
+    width: min(100% - 1.25rem, 1200px);
+  }
+
+  .movie-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4) var(--space-3);
+  }
+
+  .search-form .button {
+    padding-inline: var(--space-2);
+    font-size: 0.875rem;
+  }
+
+  .favorite-button {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+  }
+
   .detail-body {
     grid-template-columns: 86px minmax(0, 1fr);
     gap: var(--space-3);
@@ -942,5 +1024,9 @@ a {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .movie-card {
+    animation: none;
   }
 }
