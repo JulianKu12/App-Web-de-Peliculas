@@ -344,12 +344,6 @@ function handleFilterChange() {
   appState.filters.genre = genreFilter.value;
   appState.filters.sort = sortFilter.value;
   loadMovies();
-
-  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  movieGrid.scrollIntoView({
-    behavior: prefersReducedMotion ? "auto" : "smooth",
-    block: "start"
-  });
 }
 
 searchInput.addEventListener("input", scheduleSearch);
