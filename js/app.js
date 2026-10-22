@@ -47,6 +47,7 @@ const ERROR_TYPES = {
 
 const DEMO_MODE = new URLSearchParams(window.location.search).get("simular");
 
+/** Convierte un error tipado en el mensaje y las acciones que verá la persona. */
 function getErrorPresentation(error) {
   const presentations = {
     [ERROR_TYPES.SIN_CONEXION]: {
@@ -120,7 +121,6 @@ const appState = {
   requestController: null,
   searchDebounce: null,
   detailRequestController: null,
-  activeMovieId: null,
   detailOpener: null,
   previousBodyOverflow: "",
   hadConnectionError: false,
@@ -129,6 +129,8 @@ const appState = {
   favorites: loadFavorites()
 };
 
+// Favoritos: lectura, persistencia y actualización de su vista.
+/** Recupera y valida los datos mínimos de favoritos guardados localmente. */
 function loadFavorites() {
   try {
     const storedFavorites = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || "[]");
@@ -157,6 +159,7 @@ function loadFavorites() {
   }
 }
 
+/** Guarda solo los campos necesarios y comunica fallas de almacenamiento. */
 function saveFavorites() {
   try {
     localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(
@@ -214,6 +217,7 @@ function updateFavoritesToggleLabel(isShowingFavorites) {
   favoritesToggleIcon.textContent = isShowingFavorites ? "←" : "♥";
 }
 
+/** Alterna entre el catálogo normal y la lista local de favoritos. */
 function toggleFavoritesView() {
   if (appState.mode === "favoritos") {
     appState.mode = getCurrentMode();
@@ -242,6 +246,7 @@ function toggleFavoritesView() {
   renderMovies(appState.favorites);
 }
 
+/** Guarda o elimina una película y sincroniza sus controles visibles. */
 function toggleFavorite(movie) {
   const removedFavoriteIndex = appState.favorites.findIndex(
     favorite => String(favorite.id) === String(movie.id)
@@ -284,6 +289,7 @@ function toggleFavorite(movie) {
   }
 }
 
+// Registra o limpia el contexto de un error de conexión para reintentar al reconectar.
 function noteConnectionFailure(source, retryAction) {
   appState.hadConnectionError = true;
   appState.connectionRetryAction = retryAction;
@@ -298,8 +304,7 @@ function clearConnectionFailure(source) {
   }
 }
 
-// Capa de API
-// Escenarios locales de demostración; no alteran las solicitudes normales.
+// API de TMDB: respuestas simuladas solo cuando se solicita explícitamente el modo demo.
 function getSimulatedResponse(endpoint) {
   if (DEMO_MODE === "offline") {
     throw new AppError(ERROR_TYPES.SIN_CONEXION, "Error de conexión simulado.");
@@ -324,6 +329,9 @@ function getSimulatedResponse(endpoint) {
   return null;
 }
 
+/**
+ * Solicita un endpoint TMDB con parámetros comunes, timeout y reintentos de límite.
+ */
 async function fetchTMDB(endpoint, params = {}, signal) {
   const url = new URL(`${CONFIG.BASE_URL}${endpoint}`);
   url.searchParams.set("api_key", CONFIG.API_KEY);
@@ -358,6 +366,7 @@ async function fetchTMDB(endpoint, params = {}, signal) {
   }
 }
 
+// Traduce respuestas HTTP/JSON a datos válidos o errores tipados de la aplicación.
 async function readTMDBResponse(endpoint, response) {
   if (response.status === 429) {
     return { response };
@@ -502,6 +511,7 @@ function isValidTMDBResponse(endpoint, data) {
   return true;
 }
 
+// Servicios para catálogo, búsqueda, filtros, géneros y detalle de películas.
 async function getPopularMovies(page, signal) {
   return fetchTMDB("/movie/popular", { page }, signal);
 }
@@ -510,6 +520,7 @@ async function searchMovies(query, page, signal) {
   return fetchTMDB("/search/movie", { query, page }, signal);
 }
 
+/** Aplica género y orden al endpoint discover de TMDB. */
 async function discoverMovies(filters, page, signal) {
   const sortBy = {
     popular: "popularity.desc",
@@ -534,6 +545,7 @@ async function getMovieGenres() {
   return data.genres;
 }
 
+/** Obtiene detalle, créditos, videos y sinopsis en inglés como respaldo. */
 async function getMovieDetails(movieId, signal) {
   const movie = await fetchTMDB(
     `/movie/${movieId}`,
@@ -557,7 +569,8 @@ async function getMovieDetails(movieId, signal) {
   };
 }
 
-// Renderizado
+// Renderizado: tarjetas, mensajes de estado y componentes compartidos.
+/** Construye una tarjeta de película con acciones accesibles. */
 function createMovieCard(movie) {
   const title = movie.title || "Título no disponible";
   const year = movie.release_date?.slice(0, 4) || "Año desconocido";
@@ -727,6 +740,7 @@ function renderErrorState(container, error, onRetry, isDialog = false) {
   errorCountdowns.set(container, timerId);
 }
 
+// Renderizado y controles del diálogo de detalle.
 function showMovieDetailLoading() {
   const loading = document.createElement("div");
   loading.className = "detail-loading";
@@ -792,6 +806,7 @@ function createGenreChips(genres = []) {
   return list;
 }
 
+/** Construye el contenido del detalle usando los datos de TMDB recibidos. */
 function createMovieDetailContent({ movie, overviewIsEnglish }) {
   const content = document.createElement("div");
   content.className = "movie-detail";
@@ -900,11 +915,11 @@ function renderMovieDetails(detail) {
   dialogContent.replaceChildren(createMovieDetailContent(detail));
 }
 
+/** Carga el detalle y presenta errores recuperables dentro del diálogo. */
 async function loadMovieDetail(movieId) {
   appState.detailRequestController?.abort();
   const controller = new AbortController();
   appState.detailRequestController = controller;
-  appState.activeMovieId = movieId;
   showMovieDetailLoading();
 
   try {
@@ -971,6 +986,7 @@ function handleMovieGridKeydown(event) {
   openMovieDetail(card.dataset.movieId, card);
 }
 
+/** Dibuja la lista actual y anuncia su cantidad a tecnologías de asistencia. */
 function renderMovies(movies) {
   movieGrid.replaceChildren(...movies.map(createMovieCard));
   emptyState.hidden = movies.length > 0;
@@ -982,6 +998,7 @@ function renderMovies(movies) {
     : `Se muestran ${movies.length} películas.`;
 }
 
+// Estado del listado, paginación y filtros activos.
 function setLoading(isLoading) {
   appState.isLoading = isLoading;
   loadingState.hidden = !isLoading;
@@ -1020,7 +1037,7 @@ function updateSectionTitle() {
   }
 }
 
-// Inicialización
+// Orquestación de solicitudes, búsqueda, filtros e inicialización.
 function showError(error, onRetry) {
   errorState.hidden = false;
   errorState.dataset.errorSource = "movies";
@@ -1030,6 +1047,7 @@ function showError(error, onRetry) {
   renderErrorState(errorState, error, onRetry);
 }
 
+/** Carga la página actual según el modo y reemplaza o agrega resultados. */
 async function loadMovies({ reset = true } = {}) {
   if (!reset && (appState.isLoading || appState.page >= appState.totalPages)) {
     return;
@@ -1099,6 +1117,7 @@ function cancelActiveRequest() {
   setLoading(false);
 }
 
+/** Espera 500 ms antes de buscar y cancela resultados anteriores. */
 function scheduleSearch() {
   window.clearTimeout(appState.searchDebounce);
   const query = searchInput.value.trim();
@@ -1121,6 +1140,7 @@ function scheduleSearch() {
   }, 500);
 }
 
+/** Inicia géneros y catálogo después de validar la configuración local. */
 function initializeApp() {
   if (typeof CONFIG === "undefined" || !CONFIG || CONFIG.API_KEY === "TU_API_KEY_AQUI") {
     showError(new AppError(ERROR_TYPES.CLAVE_INVALIDA, "La clave API no está configurada."));
@@ -1131,6 +1151,7 @@ function initializeApp() {
   loadMovies();
 }
 
+/** Carga los géneros y actualiza las opciones del selector. */
 async function loadGenres() {
   try {
     const genres = await getMovieGenres();
@@ -1171,6 +1192,7 @@ function updateFilterAvailability() {
   filterControls.classList.toggle("is-disabled", hasSearchText || favoritesOnly);
 }
 
+/** Actualiza filtros y solicita una primera página con los nuevos criterios. */
 function handleFilterChange() {
   if (appState.filters.query.length > 0) {
     return;
@@ -1181,6 +1203,7 @@ function handleFilterChange() {
   loadMovies();
 }
 
+// Eventos de controles, conectividad, accesibilidad e inicio de la aplicación.
 searchInput.addEventListener("input", scheduleSearch);
 searchForm.addEventListener("submit", event => {
   event.preventDefault();
@@ -1222,7 +1245,6 @@ movieDialog.addEventListener("click", event => {
 movieDialog.addEventListener("close", () => {
   appState.detailRequestController?.abort();
   appState.detailRequestController = null;
-  appState.activeMovieId = null;
   document.body.style.overflow = appState.previousBodyOverflow;
   if (appState.detailOpener?.isConnected) {
     appState.detailOpener.focus();
