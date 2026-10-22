@@ -15,3 +15,9 @@ modificar la configuración:
 
 Por ejemplo: `http://localhost:5500/?simular=429`. Quita el parámetro para volver
 a las solicitudes normales de TMDB.
+
+## Favoritos
+
+Usa el corazón de una película para guardarla en este navegador. La lista se
+conserva en `localStorage` y se consulta desde el botón **Favoritos** del
+encabezado; no requiere solicitudes adicionales a TMDB.

@@ -3,17 +3,31 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Descubre películas populares, busca títulos y guarda tus favoritas en Butaca.">
     <meta name="theme-color" content="#111318">
     <title>Butaca | Películas</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffb547'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui,sans-serif' font-size='42' font-weight='800' fill='%23211607'%3EB%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="css/styles.css">
   </head>
   <body>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="#" aria-label="Butaca, inicio">
-          <span class="brand-mark" aria-hidden="true">B</span>
-          <span>Butaca</span>
-        </a>
+        <div class="header-actions">
+          <a class="brand" href="#" aria-label="Butaca, inicio">
+            <span class="brand-mark" aria-hidden="true">B</span>
+            <span>Butaca</span>
+          </a>
+          <button
+            class="button button--secondary favorites-toggle"
+            type="button"
+            aria-pressed="false"
+            aria-controls="movie-grid"
+          >
+            <span aria-hidden="true">♥</span>
+            <span>Favoritos</span>
+            <span class="favorites-count" aria-label="0 favoritos">0</span>
+          </button>
+        </div>
 
         <form class="search-form" role="search">
           <label class="visually-hidden" for="movie-search">Buscar películas</label>
@@ -79,8 +93,9 @@
           </div>
         </div>
 
-        <div class="movie-grid" aria-label="Películas">
+        <div id="movie-grid" class="movie-grid" role="list" aria-label="Películas">
         </div>
+        <p class="visually-hidden results-announcement" role="status" aria-live="polite" aria-atomic="true"></p>
 
         <div class="load-more-wrap">
           <button class="button button--secondary load-more" type="button">Cargar más</button>
@@ -94,6 +109,9 @@
         <div class="dialog-content"></div>
       </div>
     </dialog>
+    <button class="back-to-top" type="button" aria-label="Volver arriba" hidden>
+      <span aria-hidden="true">↑</span>
+    </button>
 
     <footer class="site-footer">
       <p>

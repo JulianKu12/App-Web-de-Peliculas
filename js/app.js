@@ -6,6 +6,7 @@ const emptyState = document.querySelector(".state--empty");
 const emptyMessage = emptyState.querySelector("p");
 const sectionTitle = document.querySelector("#section-title");
 const loadMoreButton = document.querySelector(".load-more");
+const loadMoreWrap = document.querySelector(".load-more-wrap");
 const movieDialog = document.querySelector(".movie-dialog");
 const dialogContent = movieDialog.querySelector(".dialog-content");
 const dialogCloseButton = movieDialog.querySelector(".dialog-close");
@@ -15,6 +16,11 @@ const searchInput = document.querySelector("#movie-search");
 const genreFilter = document.querySelector("#genre-filter");
 const sortFilter = document.querySelector("#sort-order");
 const filterControls = document.querySelector(".filter-controls");
+const favoritesToggle = document.querySelector(".favorites-toggle");
+const favoritesCount = document.querySelector(".favorites-count");
+const resultsAnnouncement = document.querySelector(".results-announcement");
+const backToTopButton = document.querySelector(".back-to-top");
+const FAVORITES_STORAGE_KEY = "butaca-favorites";
 
 // Errores tipados de la aplicación
 class AppError extends Error {
@@ -117,8 +123,157 @@ const appState = {
   previousBodyOverflow: "",
   hadConnectionError: false,
   connectionRetryAction: null,
-  connectionErrorSource: null
+  connectionErrorSource: null,
+  favorites: loadFavorites()
 };
+
+function loadFavorites() {
+  try {
+    const storedFavorites = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || "[]");
+    if (!Array.isArray(storedFavorites)) {
+      throw new TypeError("Los favoritos guardados no tienen un formato válido.");
+    }
+    return storedFavorites
+      .filter(movie =>
+        movie
+        && (typeof movie.id === "number" || typeof movie.id === "string")
+        && typeof movie.title === "string"
+        && (movie.poster_path === null || typeof movie.poster_path === "string")
+        && typeof movie.release_date === "string"
+        && Number.isFinite(Number(movie.vote_average))
+      )
+      .map(({ id, title, poster_path, release_date, vote_average }) => ({
+        id,
+        title,
+        poster_path,
+        release_date,
+        vote_average: Number(vote_average)
+      }));
+  } catch (error) {
+    console.error("No se pudieron leer los favoritos del almacenamiento local.", error);
+    return [];
+  }
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(
+      appState.favorites.map(({ id, title, poster_path, release_date, vote_average }) => ({
+        id,
+        title,
+        poster_path: poster_path || null,
+        release_date: release_date || "",
+        vote_average: Number(vote_average) || 0
+      }))
+    ));
+    return true;
+  } catch (error) {
+    console.error("No se pudieron guardar los favoritos en el almacenamiento local.", error);
+    resultsAnnouncement.textContent = "No se pudieron guardar los cambios de favoritos en este dispositivo.";
+    return false;
+  }
+}
+
+function isFavorite(movieId) {
+  return appState.favorites.some(movie => String(movie.id) === String(movieId));
+}
+
+function createFavoriteButton(movie) {
+  const button = document.createElement("button");
+  button.className = "favorite-button";
+  button.type = "button";
+  button.dataset.favoriteId = String(movie.id);
+  updateFavoriteButton(button, movie);
+  button.addEventListener("click", event => {
+    event.stopPropagation();
+    toggleFavorite(movie);
+  });
+  return button;
+}
+
+function updateFavoriteButton(button, movie) {
+  const favorite = isFavorite(movie.id);
+  button.setAttribute("aria-pressed", String(favorite));
+  button.setAttribute(
+    "aria-label",
+    `${favorite ? "Quitar" : "Agregar"} ${movie.title} ${favorite ? "de" : "a"} favoritos`
+  );
+  button.textContent = favorite ? "♥" : "♡";
+}
+
+function updateFavoritesCount() {
+  const count = appState.favorites.length;
+  favoritesCount.textContent = String(count);
+  favoritesCount.setAttribute("aria-label", `${count} ${count === 1 ? "favorito" : "favoritos"}`);
+}
+
+function toggleFavoritesView() {
+  if (appState.mode === "favoritos") {
+    appState.mode = getCurrentMode();
+    favoritesToggle.setAttribute("aria-pressed", "false");
+    updateFilterAvailability();
+    updateSectionTitle();
+    loadMovies();
+    return;
+  }
+
+  cancelActiveRequest();
+  appState.mode = "favoritos";
+  appState.page = 1;
+  appState.totalPages = 1;
+  favoritesToggle.setAttribute("aria-pressed", "true");
+  updateFilterAvailability();
+  sectionTitle.textContent = "Mis películas favoritas";
+  emptyMessage.textContent = "Guarda películas con el corazón y aparecerán aquí.";
+  errorState.hidden = true;
+  loadingState.hidden = true;
+  movieGrid.hidden = false;
+  loadMoreButton.hidden = true;
+  loadMoreWrap.hidden = true;
+  renderMovies(appState.favorites);
+}
+
+function toggleFavorite(movie) {
+  const removedFavoriteIndex = appState.favorites.findIndex(
+    favorite => String(favorite.id) === String(movie.id)
+  );
+  if (removedFavoriteIndex !== -1) {
+    appState.favorites = appState.favorites.filter(
+      favorite => String(favorite.id) !== String(movie.id)
+    );
+  } else {
+    appState.favorites = [...appState.favorites, {
+      id: movie.id,
+      title: movie.title || "Título no disponible",
+      poster_path: movie.poster_path || null,
+      release_date: movie.release_date || "",
+      vote_average: Number(movie.vote_average) || 0
+    }];
+  }
+
+  const isSaved = saveFavorites();
+  updateFavoritesCount();
+  document.querySelectorAll(".favorite-button").forEach(button => {
+    if (button.dataset.favoriteId === String(movie.id)) {
+      updateFavoriteButton(button, movie);
+    }
+  });
+
+  if (appState.mode === "favoritos") {
+    renderMovies(appState.favorites);
+    if (!isSaved) {
+      resultsAnnouncement.textContent = "No se pudieron guardar los cambios de favoritos en este dispositivo.";
+    }
+    if (removedFavoriteIndex !== -1 && !movieDialog.contains(document.activeElement)) {
+      const nextCard = movieGrid.children[Math.min(removedFavoriteIndex, movieGrid.children.length - 1)];
+      (nextCard || favoritesToggle).focus();
+    }
+  } else if (isSaved) {
+    resultsAnnouncement.textContent = `${movie.title} ${isFavorite(movie.id) ? "se agregó a" : "se quitó de"} favoritos.`;
+  } else {
+    resultsAnnouncement.textContent = "No se pudieron guardar los cambios de favoritos en este dispositivo.";
+  }
+}
 
 function noteConnectionFailure(source, retryAction) {
   appState.hadConnectionError = true;
@@ -401,10 +556,11 @@ function createMovieCard(movie) {
   const card = document.createElement("article");
   card.className = "movie-card";
   card.tabIndex = 0;
-  card.setAttribute("role", "button");
+  card.setAttribute("role", "listitem");
+  card.setAttribute("aria-keyshortcuts", "Enter Space");
   card.setAttribute(
     "aria-label",
-    `${title}, ${year}, calificación ${ratingValue.toFixed(1)} de 10. Abrir detalle.`
+    `${title}, ${year}, calificación ${ratingValue.toFixed(1)} de 10. Presiona Enter para ver el detalle.`
   );
   card.dataset.movieId = movie.id;
 
@@ -425,6 +581,7 @@ function createMovieCard(movie) {
   } else {
     poster.append(createPosterPlaceholder());
   }
+  poster.append(createFavoriteButton(movie));
 
   const info = document.createElement("div");
   info.className = "movie-info";
@@ -635,7 +792,10 @@ function createMovieDetailContent({ movie, overviewIsEnglish }) {
     backdrop.className = "detail-backdrop";
     backdrop.src = `${CONFIG.IMG_URL}original${movie.backdrop_path}`;
     backdrop.alt = "";
-    backdrop.addEventListener("error", () => backdrop.remove(), { once: true });
+    backdrop.addEventListener("error", () => {
+      backdrop.remove();
+      content.classList.add("movie-detail--no-backdrop");
+    }, { once: true });
     content.append(backdrop);
   }
 
@@ -678,7 +838,11 @@ function createMovieDetailContent({ movie, overviewIsEnglish }) {
     createTextElement("span", "detail-runtime", runtime),
     createTextElement("span", `detail-rating ${getRatingClass(rating)}`, `★ ${rating.toFixed(1)}`)
   );
-  information.append(metadata, createGenreChips(movie.genres));
+  information.append(
+    metadata,
+    createGenreChips(movie.genres),
+    createFavoriteButton(movie)
+  );
 
   const overviewSection = document.createElement("section");
   overviewSection.className = "detail-overview";
@@ -772,6 +936,9 @@ function closeMovieDetail() {
 }
 
 function handleMovieGridClick(event) {
+  if (event.target.closest(".favorite-button")) {
+    return;
+  }
   const card = event.target.closest(".movie-card");
   if (card && movieGrid.contains(card)) {
     openMovieDetail(card.dataset.movieId, card);
@@ -780,6 +947,9 @@ function handleMovieGridClick(event) {
 
 function handleMovieGridKeydown(event) {
   if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+  if (event.target.closest(".favorite-button")) {
     return;
   }
 
@@ -795,6 +965,12 @@ function handleMovieGridKeydown(event) {
 function renderMovies(movies) {
   movieGrid.replaceChildren(...movies.map(createMovieCard));
   emptyState.hidden = movies.length > 0;
+  if (appState.mode === "favoritos") {
+    emptyMessage.textContent = "Guarda películas con el corazón y aparecerán aquí.";
+  }
+  resultsAnnouncement.textContent = movies.length === 1
+    ? "Se muestra 1 película."
+    : `Se muestran ${movies.length} películas.`;
 }
 
 function setLoading(isLoading) {
@@ -805,6 +981,7 @@ function setLoading(isLoading) {
   loadMoreButton.hidden = hasError
     || appState.movies.length === 0
     || appState.page >= appState.totalPages;
+  loadMoreWrap.hidden = loadMoreButton.hidden;
   loadMoreButton.disabled = isLoading;
 }
 
@@ -975,9 +1152,14 @@ async function loadGenres() {
 
 function updateFilterAvailability() {
   const hasSearchText = appState.filters.query.length > 0;
-  genreFilter.disabled = hasSearchText;
-  sortFilter.disabled = hasSearchText;
-  filterControls.classList.toggle("is-disabled", hasSearchText);
+  const favoritesOnly = appState.mode === "favoritos";
+  genreFilter.disabled = hasSearchText || favoritesOnly;
+  sortFilter.disabled = hasSearchText || favoritesOnly;
+  searchInput.disabled = favoritesOnly;
+  searchForm.querySelectorAll("button").forEach(button => {
+    button.disabled = favoritesOnly;
+  });
+  filterControls.classList.toggle("is-disabled", hasSearchText || favoritesOnly);
 }
 
 function handleFilterChange() {
@@ -1017,6 +1199,8 @@ sortFilter.addEventListener("change", handleFilterChange);
 loadMoreButton.addEventListener("click", () => {
   loadMovies({ reset: false });
 });
+favoritesToggle.addEventListener("click", toggleFavoritesView);
+updateFavoritesCount();
 movieGrid.addEventListener("click", handleMovieGridClick);
 movieGrid.addEventListener("keydown", handleMovieGridKeydown);
 dialogCloseButton.addEventListener("click", closeMovieDetail);
@@ -1030,7 +1214,11 @@ movieDialog.addEventListener("close", () => {
   appState.detailRequestController = null;
   appState.activeMovieId = null;
   document.body.style.overflow = appState.previousBodyOverflow;
-  appState.detailOpener?.focus();
+  if (appState.detailOpener?.isConnected) {
+    appState.detailOpener.focus();
+  } else {
+    favoritesToggle.focus();
+  }
   appState.detailOpener = null;
 });
 window.addEventListener("offline", () => {
@@ -1047,4 +1235,13 @@ window.addEventListener("online", () => {
   }
 });
 connectionNotice.hidden = typeof navigator === "undefined" || navigator.onLine !== false;
+backToTopButton.addEventListener("click", () => {
+  const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+  window.scrollTo({ top: 0, behavior });
+});
+window.addEventListener("scroll", () => {
+  backToTopButton.hidden = window.scrollY < 500;
+}, { passive: true });
 initializeApp();
