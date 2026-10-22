@@ -5,6 +5,8 @@ const errorState = document.querySelector(".state--error");
 const emptyState = document.querySelector(".state--empty");
 const errorTitle = errorState.querySelector("h2");
 const errorMessage = errorState.querySelector("p");
+const emptyMessage = emptyState.querySelector("p");
+const sectionTitle = document.querySelector("#section-title");
 const loadMoreButton = document.querySelector(".load-more");
 const searchForm = document.querySelector(".search-form");
 const searchInput = document.querySelector("#movie-search");
@@ -162,6 +164,12 @@ async function loadMovies(mode, query = "", append = false) {
   appState.requestController = requestController;
   appState.mode = mode;
   appState.filters.query = query;
+  sectionTitle.textContent = mode === "búsqueda"
+    ? `Resultados para «${query}»`
+    : "Películas populares";
+  emptyMessage.textContent = mode === "búsqueda"
+    ? "Prueba con otro título."
+    : "Prueba con otra búsqueda o cambia los filtros.";
 
   const page = append ? appState.page + 1 : 1;
   loadingState.hidden = false;
