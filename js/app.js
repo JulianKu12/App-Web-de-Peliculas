@@ -82,6 +82,29 @@ async function getMovieGenres() {
   return data.genres;
 }
 
+async function getMovieDetails(movieId, signal) {
+  const movie = await fetchTMDB(
+    `/movie/${movieId}`,
+    { append_to_response: "credits,videos" },
+    signal
+  );
+
+  if (movie.overview?.trim()) {
+    return { movie, overviewIsEnglish: false };
+  }
+
+  const englishMovie = await fetchTMDB(
+    `/movie/${movieId}`,
+    { append_to_response: "credits,videos", language: "en-US" },
+    signal
+  );
+
+  return {
+    movie: { ...movie, overview: englishMovie.overview },
+    overviewIsEnglish: Boolean(englishMovie.overview?.trim())
+  };
+}
+
 // Renderizado
 function createMovieCard(movie) {
   const title = movie.title || "Título no disponible";
