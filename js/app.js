@@ -6,6 +6,8 @@ const emptyState = document.querySelector(".state--empty");
 const errorTitle = errorState.querySelector("h2");
 const errorMessage = errorState.querySelector("p");
 const loadMoreButton = document.querySelector(".load-more");
+const searchForm = document.querySelector(".search-form");
+const searchInput = document.querySelector("#movie-search");
 
 // Estado de la aplicación
 const appState = {
@@ -17,7 +19,10 @@ const appState = {
     sort: "popular"
   },
   movies: [],
-  isLoading: false
+  isLoading: false,
+  requestId: 0,
+  requestController: null,
+  searchDebounce: null
 };
 
 // Capa de API
@@ -39,8 +44,8 @@ async function fetchTMDB(endpoint, params = {}, signal) {
   return response.json();
 }
 
-async function getPopularMovies(page) {
-  const data = await fetchTMDB("/movie/popular", { page });
+async function getPopularMovies(page, signal) {
+  const data = await fetchTMDB("/movie/popular", { page }, signal);
   return data.results;
 }
 
@@ -150,10 +155,13 @@ function showError(title, message) {
   loadMoreButton.hidden = true;
 }
 
-async function loadPopularMovies(append = false) {
-  if (appState.isLoading) {
-    return;
-  }
+async function loadMovies(mode, query = "", append = false) {
+  appState.requestController?.abort();
+  const requestController = new AbortController();
+  const requestId = ++appState.requestId;
+  appState.requestController = requestController;
+  appState.mode = mode;
+  appState.filters.query = query;
 
   const page = append ? appState.page + 1 : 1;
   loadingState.hidden = false;
@@ -162,11 +170,22 @@ async function loadPopularMovies(append = false) {
   setLoading(true);
 
   try {
-    const movies = await getPopularMovies(page);
+    const movies = mode === "búsqueda"
+      ? await searchMovies(query, page, requestController.signal)
+      : await getPopularMovies(page, requestController.signal);
+
+    if (requestId !== appState.requestId) {
+      return;
+    }
+
     appState.page = page;
     appState.movies = append ? [...appState.movies, ...movies] : movies;
     renderMovies(appState.movies);
   } catch (error) {
+    if (requestId !== appState.requestId || error.name === "AbortError") {
+      return;
+    }
+
     showError(
       "No se pudieron cargar las películas",
       `Ocurrió un error al conectar con TMDB: ${
@@ -174,8 +193,45 @@ async function loadPopularMovies(append = false) {
       }`
     );
   } finally {
-    setLoading(false);
+    if (requestId === appState.requestId) {
+      appState.requestController = null;
+      setLoading(false);
+    }
   }
+}
+
+function cancelActiveRequest() {
+  appState.requestId += 1;
+  appState.requestController?.abort();
+  appState.requestController = null;
+  setLoading(false);
+}
+
+function startSearch(query) {
+  const normalizedQuery = query.trim();
+
+  if (normalizedQuery.length >= 2) {
+    loadMovies("búsqueda", normalizedQuery);
+  } else if (appState.mode !== "popular") {
+    loadMovies("popular");
+  }
+}
+
+function scheduleSearch() {
+  window.clearTimeout(appState.searchDebounce);
+  cancelActiveRequest();
+
+  const query = searchInput.value.trim();
+  if (query.length < 2) {
+    if (appState.mode !== "popular") {
+      loadMovies("popular");
+    }
+    return;
+  }
+
+  appState.searchDebounce = window.setTimeout(() => {
+    startSearch(query);
+  }, 500);
 }
 
 function initializeApp() {
@@ -187,8 +243,24 @@ function initializeApp() {
     return;
   }
 
-  loadPopularMovies();
+  loadMovies("popular");
 }
 
-loadMoreButton.addEventListener("click", () => loadPopularMovies(true));
+searchInput.addEventListener("input", scheduleSearch);
+searchForm.addEventListener("submit", event => {
+  event.preventDefault();
+  window.clearTimeout(appState.searchDebounce);
+  cancelActiveRequest();
+  startSearch(searchInput.value);
+});
+searchForm.addEventListener("reset", event => {
+  event.preventDefault();
+  window.clearTimeout(appState.searchDebounce);
+  searchInput.value = "";
+  cancelActiveRequest();
+  loadMovies("popular");
+});
+loadMoreButton.addEventListener("click", () => {
+  loadMovies(appState.mode, appState.filters.query, true);
+});
 initializeApp();
