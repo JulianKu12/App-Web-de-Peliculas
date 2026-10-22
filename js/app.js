@@ -37,6 +37,8 @@ const ERROR_TYPES = {
   SIN_RESULTADOS: "SIN_RESULTADOS"
 };
 
+const DEMO_MODE = new URLSearchParams(window.location.search).get("simular");
+
 function getErrorPresentation(error) {
   const presentations = {
     [ERROR_TYPES.SIN_CONEXION]: {
@@ -114,10 +116,50 @@ const appState = {
   detailOpener: null,
   previousBodyOverflow: "",
   hadConnectionError: false,
-  connectionRetryAction: null
+  connectionRetryAction: null,
+  connectionErrorSource: null
 };
 
+function noteConnectionFailure(source, retryAction) {
+  appState.hadConnectionError = true;
+  appState.connectionRetryAction = retryAction;
+  appState.connectionErrorSource = source;
+}
+
+function clearConnectionFailure(source) {
+  if (appState.connectionErrorSource === source) {
+    appState.hadConnectionError = false;
+    appState.connectionRetryAction = null;
+    appState.connectionErrorSource = null;
+  }
+}
+
 // Capa de API
+// Escenarios locales de demostración; no alteran las solicitudes normales.
+function getSimulatedResponse(endpoint) {
+  if (DEMO_MODE === "offline") {
+    throw new AppError(ERROR_TYPES.SIN_CONEXION, "Error de conexión simulado.");
+  }
+
+  const statuses = { "401": 401, "429": 429, "500": 500 };
+  if (statuses[DEMO_MODE]) {
+    return {
+      ok: false,
+      status: statuses[DEMO_MODE],
+      headers: { get: name => name.toLowerCase() === "retry-after" ? "0" : null }
+    };
+  }
+
+  if (
+    DEMO_MODE === "vacio"
+    && ["/movie/popular", "/search/movie", "/discover/movie"].includes(endpoint)
+  ) {
+    return { ok: true, json: async () => ({ results: [], total_pages: 1 }) };
+  }
+
+  return null;
+}
+
 async function fetchTMDB(endpoint, params = {}, signal) {
   const url = new URL(`${CONFIG.BASE_URL}${endpoint}`);
   url.searchParams.set("api_key", CONFIG.API_KEY);
@@ -128,38 +170,56 @@ async function fetchTMDB(endpoint, params = {}, signal) {
   });
 
   for (let attempt = 0; attempt <= 2; attempt += 1) {
-    const response = await fetchWithTimeout(url, signal);
+    const simulatedResponse = getSimulatedResponse(endpoint);
+    const result = simulatedResponse
+      ? await readTMDBResponse(endpoint, simulatedResponse)
+      : await fetchWithTimeout(url, signal, response => readTMDBResponse(endpoint, response));
 
-    if (response.status === 429) {
-      const error = createHttpError(response);
+    if (result.response?.status === 429) {
+      const error = createHttpError(result.response);
       if (attempt < 2) {
         const retryDelay = error.retryAfter === null
           ? 500 * (2 ** attempt)
-          : error.retryAfter * 1000;
+          : error.retryAfter * 1000 * (2 ** attempt);
         await waitForRetry(retryDelay, signal);
         continue;
       }
-      error.retryAfter ??= 4;
+      if (!error.retryAfter) {
+        error.retryAfter = 4;
+      }
       throw error;
     }
 
-    if (!response.ok) {
-      throw createHttpError(response);
-    }
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (error) {
-      throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La respuesta JSON no es válida.", { cause: error });
-    }
-
-    if (!isValidTMDBResponse(endpoint, data)) {
-      throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La estructura de respuesta no es válida.");
-    }
-
-    return data;
+    return result.data;
   }
+}
+
+async function readTMDBResponse(endpoint, response) {
+  if (response.status === 429) {
+    return { response };
+  }
+  if (!response.ok) {
+    throw createHttpError(response);
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw error;
+    }
+    if (error instanceof TypeError || error?.name === "TypeError") {
+      throw error;
+    }
+    throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La respuesta JSON no es válida.", { cause: error });
+  }
+
+  if (!isValidTMDBResponse(endpoint, data)) {
+    throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La estructura de respuesta no es válida.");
+  }
+
+  return { data };
 }
 
 function createHttpError(response) {
@@ -192,7 +252,7 @@ function createHttpError(response) {
   return new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "TMDB rechazó la solicitud.");
 }
 
-async function fetchWithTimeout(url, signal) {
+async function fetchWithTimeout(url, signal, consumeResponse) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new AppError(ERROR_TYPES.SIN_CONEXION, "El navegador no tiene conexión.");
   }
@@ -210,15 +270,19 @@ async function fetchWithTimeout(url, signal) {
   }, 10_000);
 
   try {
-    return await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { signal: controller.signal });
+    return await consumeResponse(response);
   } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
     if (timedOut) {
       throw new AppError(ERROR_TYPES.TIMEOUT, "La solicitud excedió el tiempo límite.", { cause: error });
     }
     if (signal?.aborted) {
       throw error;
     }
-    if (error instanceof TypeError) {
+    if (error instanceof TypeError || error?.name === "TypeError") {
       throw new AppError(ERROR_TYPES.SIN_CONEXION, "No fue posible conectar con TMDB.", { cause: error });
     }
     throw error;
@@ -431,10 +495,9 @@ function clearErrorCountdown(container) {
 function renderErrorState(container, error, onRetry, isDialog = false) {
   clearErrorCountdown(container);
   const presentation = getErrorPresentation(error);
-  container.replaceChildren();
-  if (isDialog) {
-    container.className = "detail-error";
-  }
+  const errorContent = document.createElement("div");
+  errorContent.className = isDialog ? "detail-error" : "error-state-content";
+  errorContent.setAttribute("role", "alert");
 
   const icon = createTextElement("span", "state-icon", presentation.icon);
   icon.setAttribute("aria-hidden", "true");
@@ -451,9 +514,10 @@ function renderErrorState(container, error, onRetry, isDialog = false) {
     isDialog ? "detail-error-message" : "",
     presentation.description
   );
-  container.append(icon, title, description);
+  errorContent.append(icon, title, description);
 
   if (!presentation.allowsRetry || typeof onRetry !== "function") {
+    container.replaceChildren(errorContent);
     return;
   }
 
@@ -462,14 +526,16 @@ function renderErrorState(container, error, onRetry, isDialog = false) {
   retryButton.type = "button";
   retryButton.textContent = "Reintentar";
   retryButton.addEventListener("click", onRetry);
-  container.append(retryButton);
+  errorContent.append(retryButton);
 
   if (error.type !== ERROR_TYPES.LIMITE_PETICIONES) {
+    container.replaceChildren(errorContent);
     return;
   }
 
   let remainingSeconds = Math.ceil(error.retryAfter ?? 0);
   if (remainingSeconds <= 0) {
+    container.replaceChildren(errorContent);
     return;
   }
 
@@ -479,7 +545,8 @@ function renderErrorState(container, error, onRetry, isDialog = false) {
     "error-countdown",
     `Podrás reintentar en ${remainingSeconds} s.`
   );
-  container.append(countdown);
+  errorContent.append(countdown);
+  container.replaceChildren(errorContent);
 
   const timerId = window.setInterval(() => {
     remainingSeconds -= 1;
@@ -672,8 +739,7 @@ async function loadMovieDetail(movieId) {
     if (appState.detailRequestController !== controller) {
       return;
     }
-    appState.hadConnectionError = false;
-    appState.connectionRetryAction = null;
+    clearConnectionFailure("detail");
     renderMovieDetails(detail);
   } catch (error) {
     if (controller.signal.aborted || error.name === "AbortError") {
@@ -681,8 +747,7 @@ async function loadMovieDetail(movieId) {
     }
     console.error("Error al cargar el detalle de la película.", error);
     if (error.type === ERROR_TYPES.SIN_CONEXION) {
-      appState.hadConnectionError = true;
-      appState.connectionRetryAction = () => loadMovieDetail(movieId);
+      noteConnectionFailure("detail", () => loadMovieDetail(movieId));
     }
     renderErrorState(dialogContent, error, () => loadMovieDetail(movieId), true);
   }
@@ -735,7 +800,7 @@ function renderMovies(movies) {
 function setLoading(isLoading) {
   appState.isLoading = isLoading;
   loadingState.hidden = !isLoading;
-  const hasError = !errorState.hidden;
+  const hasError = !errorState.hidden && errorState.dataset.errorSource !== "genres";
   movieGrid.hidden = (isLoading && appState.movies.length === 0) || hasError;
   loadMoreButton.hidden = hasError
     || appState.movies.length === 0
@@ -772,6 +837,7 @@ function updateSectionTitle() {
 // Inicialización
 function showError(error, onRetry) {
   errorState.hidden = false;
+  errorState.dataset.errorSource = "movies";
   emptyState.hidden = true;
   movieGrid.hidden = true;
   loadMoreButton.hidden = true;
@@ -810,8 +876,7 @@ async function loadMovies({ reset = true } = {}) {
       return;
     }
 
-    appState.hadConnectionError = false;
-    appState.connectionRetryAction = null;
+    clearConnectionFailure("movies");
     if (reset && data.results.length === 0) {
       appState.page = page;
       appState.totalPages = Number(data.total_pages) || 1;
@@ -830,8 +895,7 @@ async function loadMovies({ reset = true } = {}) {
 
     console.error("Error al cargar películas.", error);
     if (error.type === ERROR_TYPES.SIN_CONEXION) {
-      appState.hadConnectionError = true;
-      appState.connectionRetryAction = () => loadMovies({ reset });
+      noteConnectionFailure("movies", () => loadMovies({ reset }));
     }
     showError(error, () => loadMovies({ reset }));
   } finally {
@@ -884,8 +948,11 @@ function initializeApp() {
 async function loadGenres() {
   try {
     const genres = await getMovieGenres();
-    appState.hadConnectionError = false;
-    appState.connectionRetryAction = null;
+    clearConnectionFailure("genres");
+    if (errorState.dataset.errorSource === "genres") {
+      errorState.hidden = true;
+      delete errorState.dataset.errorSource;
+    }
     const defaultOption = genreFilter.options[0];
     genreFilter.replaceChildren(defaultOption);
 
@@ -898,10 +965,11 @@ async function loadGenres() {
   } catch (error) {
     console.error("No se pudieron cargar los géneros de TMDB.", error);
     if (error.type === ERROR_TYPES.SIN_CONEXION) {
-      appState.hadConnectionError = true;
-      appState.connectionRetryAction = () => loadGenres();
+      noteConnectionFailure("genres", () => loadGenres());
     }
-    showError(error, () => loadGenres());
+    errorState.dataset.errorSource = "genres";
+    errorState.hidden = false;
+    renderErrorState(errorState, error, () => loadGenres());
   }
 }
 
@@ -974,6 +1042,7 @@ window.addEventListener("online", () => {
     const retryAction = appState.connectionRetryAction;
     appState.hadConnectionError = false;
     appState.connectionRetryAction = null;
+    appState.connectionErrorSource = null;
     retryAction();
   }
 });
