@@ -294,17 +294,28 @@ a {
 }
 
 .poster-placeholder {
-  display: grid;
+  display: flex;
   width: 100%;
   height: 100%;
-  place-items: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   background: radial-gradient(circle at 50% 35%, #353b47, var(--color-surface) 70%);
   color: var(--color-muted);
+  text-align: center;
 }
 
 .poster-placeholder::before {
   content: "▶";
   font-size: 2rem;
+}
+
+.poster-placeholder::after {
+  max-width: 80%;
+  color: var(--color-muted);
+  content: "Póster no disponible";
+  font-size: 0.72rem;
 }
 
 .movie-info {
