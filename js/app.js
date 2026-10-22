@@ -17,6 +17,27 @@ const genreFilter = document.querySelector("#genre-filter");
 const sortFilter = document.querySelector("#sort-order");
 const filterControls = document.querySelector(".filter-controls");
 
+// Errores tipados de la aplicación
+class AppError extends Error {
+  constructor(type, message, options = {}) {
+    super(message);
+    this.name = "AppError";
+    this.type = type;
+    this.retryAfter = options.retryAfter ?? null;
+  }
+}
+
+const ERROR_TYPES = {
+  SIN_CONEXION: "SIN_CONEXION",
+  TIMEOUT: "TIMEOUT",
+  CLAVE_INVALIDA: "CLAVE_INVALIDA",
+  NO_ENCONTRADO: "NO_ENCONTRADO",
+  LIMITE_PETICIONES: "LIMITE_PETICIONES",
+  ERROR_SERVIDOR: "ERROR_SERVIDOR",
+  RESPUESTA_INVALIDA: "RESPUESTA_INVALIDA",
+  SIN_RESULTADOS: "SIN_RESULTADOS"
+};
+
 // Estado de la aplicación
 const appState = {
   mode: "popular",
@@ -51,10 +72,69 @@ async function fetchTMDB(endpoint, params = {}, signal) {
   const response = await fetch(url, { signal });
 
   if (!response.ok) {
-    throw new Error(`La API de TMDB respondió con el estado ${response.status}.`);
+    throw createHttpError(response);
   }
 
-  return response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La respuesta JSON no es válida.", { cause: error });
+  }
+
+  if (!isValidTMDBResponse(endpoint, data)) {
+    throw new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "La estructura de respuesta no es válida.");
+  }
+
+  return data;
+}
+
+function createHttpError(response) {
+  const retryAfterHeader = response.headers.get("Retry-After");
+  const retryAfter = retryAfterHeader && Number.isFinite(Number(retryAfterHeader))
+    ? Math.max(0, Number(retryAfterHeader))
+    : null;
+
+  if (response.status === 401) {
+    return new AppError(ERROR_TYPES.CLAVE_INVALIDA, "TMDB rechazó las credenciales.");
+  }
+  if (response.status === 404) {
+    return new AppError(ERROR_TYPES.NO_ENCONTRADO, "El recurso solicitado no existe.");
+  }
+  if (response.status === 429) {
+    return new AppError(ERROR_TYPES.LIMITE_PETICIONES, "Se alcanzó el límite de solicitudes.", { retryAfter });
+  }
+  if (response.status >= 500 && response.status <= 599) {
+    return new AppError(ERROR_TYPES.ERROR_SERVIDOR, "TMDB no está disponible.");
+  }
+
+  return new AppError(ERROR_TYPES.RESPUESTA_INVALIDA, "TMDB rechazó la solicitud.");
+}
+
+function isValidTMDBResponse(endpoint, data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return false;
+  }
+
+  if (["/movie/popular", "/search/movie", "/discover/movie"].includes(endpoint)) {
+    return Array.isArray(data.results)
+      && Number.isInteger(data.total_pages)
+      && data.total_pages >= 0;
+  }
+  if (endpoint === "/genre/movie/list") {
+    return Array.isArray(data.genres)
+      && data.genres.every(genre => Number.isInteger(genre.id) && typeof genre.name === "string");
+  }
+  if (/^\/movie\/\d+$/.test(endpoint)) {
+    return Number.isInteger(data.id)
+      && typeof data.title === "string"
+      && data.credits
+      && Array.isArray(data.credits.cast)
+      && data.videos
+      && Array.isArray(data.videos.results);
+  }
+
+  return true;
 }
 
 async function getPopularMovies(page, signal) {
