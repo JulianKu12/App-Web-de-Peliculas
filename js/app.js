@@ -161,10 +161,12 @@ async function loadPopularMovies(append = false) {
     appState.page = page;
     appState.movies = append ? [...appState.movies, ...movies] : movies;
     renderMovies(appState.movies);
-  } catch {
+  } catch (error) {
     showError(
       "No se pudieron cargar las películas",
-      "Ocurrió un error al conectar con TMDB. Intenta de nuevo en unos momentos."
+      `Ocurrió un error al conectar con TMDB: ${
+        error instanceof Error ? error.message : "error desconocido"
+      }`
     );
   } finally {
     setLoading(false);
