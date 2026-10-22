@@ -16,6 +16,7 @@ const genreFilter = document.querySelector("#genre-filter");
 const appState = {
   mode: "popular",
   page: 1,
+  totalPages: 1,
   filters: {
     query: "",
     genre: "",
@@ -165,8 +166,10 @@ function setLoading(isLoading) {
   appState.isLoading = isLoading;
   loadingState.hidden = !isLoading;
   const hasError = !errorState.hidden;
-  movieGrid.hidden = isLoading || hasError;
-  loadMoreButton.hidden = isLoading || hasError || appState.movies.length === 0;
+  movieGrid.hidden = (isLoading && appState.movies.length === 0) || hasError;
+  loadMoreButton.hidden = hasError
+    || appState.movies.length === 0
+    || appState.page >= appState.totalPages;
   loadMoreButton.disabled = isLoading;
 }
 
@@ -207,6 +210,10 @@ function showError(title, message) {
 }
 
 async function loadMovies({ reset = true } = {}) {
+  if (!reset && (appState.isLoading || appState.page >= appState.totalPages)) {
+    return;
+  }
+
   appState.requestController?.abort();
   const requestController = new AbortController();
   const requestId = ++appState.requestId;
@@ -235,6 +242,7 @@ async function loadMovies({ reset = true } = {}) {
     }
 
     appState.page = page;
+    appState.totalPages = Number(data.total_pages) || 1;
     appState.movies = reset ? data.results : [...appState.movies, ...data.results];
     renderMovies(appState.movies);
   } catch (error) {
