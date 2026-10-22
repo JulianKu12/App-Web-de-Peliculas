@@ -366,6 +366,10 @@ searchForm.addEventListener("reset", event => {
   window.clearTimeout(appState.searchDebounce);
   searchInput.value = "";
   appState.filters.query = "";
+  appState.filters.genre = "";
+  appState.filters.sort = "popular";
+  genreFilter.value = "";
+  sortFilter.value = "popular";
   updateFilterAvailability();
   cancelActiveRequest();
   loadMovies();
