@@ -17,6 +17,8 @@ const genreFilter = document.querySelector("#genre-filter");
 const sortFilter = document.querySelector("#sort-order");
 const filterControls = document.querySelector(".filter-controls");
 const favoritesToggle = document.querySelector(".favorites-toggle");
+const favoritesToggleLabel = favoritesToggle.querySelector(".favorites-toggle-label");
+const favoritesToggleIcon = favoritesToggle.querySelector(".favorites-toggle-icon");
 const favoritesCount = document.querySelector(".favorites-count");
 const resultsAnnouncement = document.querySelector(".results-announcement");
 const backToTopButton = document.querySelector(".back-to-top");
@@ -207,10 +209,16 @@ function updateFavoritesCount() {
   favoritesCount.setAttribute("aria-label", `${count} ${count === 1 ? "favorito" : "favoritos"}`);
 }
 
+function updateFavoritesToggleLabel(isShowingFavorites) {
+  favoritesToggleLabel.textContent = isShowingFavorites ? "Volver al inicio" : "Favoritos";
+  favoritesToggleIcon.textContent = isShowingFavorites ? "←" : "♥";
+}
+
 function toggleFavoritesView() {
   if (appState.mode === "favoritos") {
     appState.mode = getCurrentMode();
     favoritesToggle.setAttribute("aria-pressed", "false");
+    updateFavoritesToggleLabel(false);
     updateFilterAvailability();
     updateSectionTitle();
     loadMovies();
@@ -222,6 +230,7 @@ function toggleFavoritesView() {
   appState.page = 1;
   appState.totalPages = 1;
   favoritesToggle.setAttribute("aria-pressed", "true");
+  updateFavoritesToggleLabel(true);
   updateFilterAvailability();
   sectionTitle.textContent = "Mis películas favoritas";
   emptyMessage.textContent = "Guarda películas con el corazón y aparecerán aquí.";
@@ -1201,6 +1210,7 @@ loadMoreButton.addEventListener("click", () => {
 });
 favoritesToggle.addEventListener("click", toggleFavoritesView);
 updateFavoritesCount();
+updateFavoritesToggleLabel(false);
 movieGrid.addEventListener("click", handleMovieGridClick);
 movieGrid.addEventListener("keydown", handleMovieGridKeydown);
 dialogCloseButton.addEventListener("click", closeMovieDetail);
